@@ -28,14 +28,6 @@ SpendWise is a full-stack expense tracking application that automatically parses
 * **AI:** Groq API (LLaMA 3)
 * **Deployment:** Vercel (frontend), Render (backend)
 
----
-
-## 📸 Screenshots
-
-(Add screenshots here later)
-
----
-
 ## ⚙️ Setup Instructions
 
 ### 1. Clone repo
