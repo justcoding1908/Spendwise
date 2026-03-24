@@ -81,19 +81,84 @@ hint: Updates were rejected because the tip of your current branch is behind
 hint: its remote counterpart. If you want to integrate the remote changes,       
 hint: use 'git pull' before pushing again.
 hint: See the 'Note about fast-forwards' in 'git push --help' for details.       
-PS C:\Users\shubh\OneDrive\Desktop\Spendwise_Project\spendwise-client> git push --help # React + Vite
+PS C:\Users\shubh\OneDrive\Desktop\Spendwise_Project\spendwise-client> git push --help # 💸 SpendWise – UPI Expense Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+🔗 **Live Demo:** https://spendwise-woad.vercel.app
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Overview
 
-## React Compiler
+SpendWise is a full-stack expense tracking application that automatically parses UPI SMS messages to extract transaction details and provides insightful analytics, budgeting tools, and AI-powered financial guidance.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## ✨ Features
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+* 📩 Regex-based UPI SMS parsing (merchant, amount, date)
+* 📊 Category-wise expense tracking (10+ categories)
+* 📈 Interactive analytics (weekly trends, pie charts)
+* 💰 Budget management with monthly limits
+* 🤖 AI-powered financial insights & anomaly detection
+* 🔐 Secure authentication with JWT
+* 📤 CSV export & transaction filtering
+
+---
+
+## 🛠️ Tech Stack
+
+* **Frontend:** React.js, Vite, Tailwind CSS, Recharts, Framer Motion
+* **Backend:** Node.js, Express.js
+* **Database:** Supabase (PostgreSQL)
+* **AI:** Groq API (LLaMA 3)
+* **Deployment:** Vercel (frontend), Render (backend)
+
+---
+
+## 📸 Screenshots
+
+(Add screenshots here later)
+
+---
+
+## ⚙️ Setup Instructions
+
+### 1. Clone repo
+
+```bash
+git clone https://github.com/justcoding1908/Spendwise.git
+cd Spendwise
+```
+
+### 2. Install dependencies
+
+```bash
+cd client
+npm install
+cd ..
+npm install
+```
+
+### 3. Run locally
+
+```bash
+# backend
+node server.js
+
+# frontend
+cd client
+npm run dev
+```
+
+---
+
+## 🌍 Deployment
+
+* Frontend: Vercel
+* Backend: Render
+
+---
+
+## 👤 Author
+
+Vaishnavi Kaushal
