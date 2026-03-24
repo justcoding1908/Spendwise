@@ -21,10 +21,11 @@ const app = express()
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://your-frontend.vercel.app"
+    "http://localhost:5175",
+    /\.vercel\.app$/        // ← allows any vercel subdomain
   ],
   credentials: true
-}));
+}))
 app.use(express.json())
 
 app.use('/api/auth', authRoutes)
@@ -32,11 +33,19 @@ app.use('/api/transactions', transactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 app.use('/api/ai', aiRoutes)
 
+app.get('/', (req, res) => {
+  res.json({ success: true, message: 'SpendWise API is running 🚀' })
+})
+
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'SpendWise API is running 🚀' })
 })
 
-const PORT = 5000;
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: 'Route not found' })
+})
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
+  console.log(`🚀 Server running on port ${PORT}`)
 })
