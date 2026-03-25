@@ -566,16 +566,35 @@ function BudgetSection({ stats }) {
 }
 
 // ── AI Floating Bubble ────────────────────────────────────────────────────────
+// ── AI Floating Bubble ────────────────────────────────────────────────────────
+function parseInsight(text) {
+  if (!text) return []
+  const sections = [
+    { emoji: '💸', color: '#ef4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.15)' },
+    { emoji: '📊', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.15)' },
+    { emoji: '🎯', color: '#00e5a0', bg: 'rgba(0,229,160,0.08)', border: 'rgba(0,229,160,0.15)' },
+    { emoji: '🔥', color: '#f97316', bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.15)' },
+    { emoji: '⚡', color: '#eab308', bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.15)' },
+  ]
+  return sections
+    .map(s => {
+      const regex = new RegExp(`${s.emoji}\\s*(.+?)(?=💸|📊|🎯|🔥|⚡|$)`, 's')
+      const match = text.match(regex)
+      return match ? { ...s, text: match[1].trim() } : null
+    })
+    .filter(Boolean)
+}
+
 function AIBubble({ stats, transactions }) {
   const [open, setOpen] = useState(false)
   const [insight, setInsight] = useState('')
   const [loading, setLoading] = useState(false)
-  const [typed, setTyped] = useState('')
   const [hasGenerated, setHasGenerated] = useState(false)
+  const [visibleCards, setVisibleCards] = useState(0)
 
   const generate = async () => {
     if (!transactions.length) { toast.error('Add transactions first!'); return }
-    setLoading(true); setInsight(''); setTyped(''); setHasGenerated(true)
+    setLoading(true); setInsight(''); setVisibleCards(0); setHasGenerated(true)
     try {
       const res = await api.post('/ai/insight', {
         totalSpent: stats.totalSpent,
@@ -585,14 +604,16 @@ function AIBubble({ stats, transactions }) {
       })
       const text = res.data.insight
       setInsight(text)
-      let i = 0
-      const iv = setInterval(() => {
-        setTyped(text.slice(0, i)); i += 3
-        if (i > text.length) { setTyped(text); clearInterval(iv) }
-      }, 15)
+      // Reveal cards one by one with delay
+      const parsed = parseInsight(text)
+      parsed.forEach((_, i) => {
+        setTimeout(() => setVisibleCards(i + 1), i * 300)
+      })
     } catch { toast.error('AI is sleeping 😴 Try again!') }
     setLoading(false)
   }
+
+  const cards = parseInsight(insight)
 
   return (
     <>
@@ -610,7 +631,7 @@ function AIBubble({ stats, transactions }) {
         {open && (
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            style={{ position: 'fixed', bottom: 90, right: 24, width: 360, zIndex: 9998,
+            style={{ position: 'fixed', bottom: 90, right: 24, width: 370, zIndex: 9998,
               background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
               boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,160,0.05)', overflow: 'hidden' }}>
 
@@ -625,49 +646,92 @@ function AIBubble({ stats, transactions }) {
                     <div style={{ fontSize: 11, color: '#00e5a0', fontWeight: 600 }}>● online · Powered by Groq</div>
                   </div>
                 </div>
-                <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
+                <button onClick={() => setOpen(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
               </div>
             </div>
 
-            {/* Messages */}
-            <div style={{ padding: 20, minHeight: 200, maxHeight: 340, overflowY: 'auto' }}>
+            {/* Messages area */}
+            <div style={{ padding: '16px 16px 8px', minHeight: 200, maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+              {/* Welcome state */}
               {!hasGenerated && !loading && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
-                  <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
-                    Hey! I'm your AI finance buddy 👋<br />
-                    I'll roast your spending and give you <strong style={{ color: 'var(--text-2)' }}>actual useful tips</strong> — not boring bank advice.
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-3)' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-2)' }}>
+                    Hey! I'm your AI finance buddy.<br />
+                    I'll <strong style={{ color: '#ef4444' }}>roast your spending</strong> and give you{' '}
+                    <strong style={{ color: '#00e5a0' }}>actual tips</strong> — not boring bank advice.
                   </div>
                 </motion.div>
               )}
+
+              {/* Loading state */}
               {loading && (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{ fontSize: 24 }}>🤖</div>
-                  <div style={{ background: 'var(--surface-2)', borderRadius: '4px 16px 16px 16px', padding: '12px 16px', fontSize: 13 }}>
-                    <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }}>
-                      Analyzing your spending habits... 🔍
-                    </motion.div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[1, 2, 3].map(i => (
+                    <motion.div key={i}
+                      animate={{ opacity: [0.4, 0.8, 0.4] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                      style={{ height: 64, borderRadius: 14, background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
+                  ))}
+                  <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+                    Analyzing your spending... 🔍
                   </div>
                 </div>
               )}
-              {typed && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                  <div style={{ fontSize: 24, flexShrink: 0 }}>🤖</div>
-                  <div style={{ background: 'linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,229,160,0.04))', border: '1px solid rgba(0,229,160,0.15)', borderRadius: '4px 16px 16px 16px', padding: '14px 16px', fontSize: 13, lineHeight: 1.75, color: 'var(--text-2)', whiteSpace: 'pre-wrap', maxWidth: 280 }}>
-                    {typed}{typed.length < insight.length ? <span style={{ color: '#00e5a0' }}>▋</span> : ''}
-                  </div>
-                </motion.div>
-              )}
+
+              {/* Insight cards */}
+              {cards.length > 0 && cards.map((card, i) => (
+                i < visibleCards && (
+                  <motion.div key={i}
+                    initial={{ opacity: 0, y: 12, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    style={{
+                      background: card.bg,
+                      border: `1px solid ${card.border}`,
+                      borderRadius: 14,
+                      padding: '12px 14px',
+                      display: 'flex',
+                      gap: 10,
+                      alignItems: 'flex-start'
+                    }}>
+                    {/* Emoji badge */}
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                      background: `${card.color}22`,
+                      border: `1px solid ${card.border}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16
+                    }}>
+                      {card.emoji}
+                    </div>
+                    {/* Text */}
+                    <div style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-2)', paddingTop: 2 }}>
+                      {/* Last card (⚡ hype line) gets special styling */}
+                      {card.emoji === '⚡'
+                        ? <strong style={{ color: card.color, fontSize: 13 }}>{card.text}</strong>
+                        : card.text
+                      }
+                    </div>
+                  </motion.div>
+                )
+              ))}
             </div>
 
             {/* Action area */}
-            <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
-              <motion.button className="btn btn-mint" onClick={generate} disabled={loading} style={{ flex: 1, padding: '12px', fontSize: 13 }} whileTap={{ scale: 0.97 }}>
-                {loading ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Thinking...</span>
-                  : hasGenerated ? '🔄 Ask again' : '⚡ Get advice'}
+            <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
+              <motion.button className="btn btn-mint" onClick={generate} disabled={loading}
+                style={{ flex: 1, padding: '12px', fontSize: 13 }} whileTap={{ scale: 0.97 }}>
+                {loading
+                  ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Thinking...</span>
+                  : hasGenerated ? '🔄 Ask again' : '⚡ Get my roast'}
               </motion.button>
             </div>
 
-            <div style={{ padding: '0 20px 14px', fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
+            <div style={{ padding: '0 16px 14px', fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
               🔒 Only spending totals sent · SMS stays on your device
             </div>
           </motion.div>
@@ -679,8 +743,10 @@ function AIBubble({ stats, transactions }) {
         animate={{ scale: open ? 0.9 : 1 }}
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.92 }}
-        style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer',
-          background: 'linear-gradient(135deg, #00e5a0, #00c5ff)', boxShadow: '0 8px 32px rgba(0,229,160,0.4), 0 0 0 1px rgba(0,229,160,0.3)',
+        style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          background: 'linear-gradient(135deg, #00e5a0, #00c5ff)',
+          boxShadow: '0 8px 32px rgba(0,229,160,0.4), 0 0 0 1px rgba(0,229,160,0.3)',
           fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.2 }}>
           {open ? '✕' : '🤖'}
@@ -690,7 +756,9 @@ function AIBubble({ stats, transactions }) {
       {/* Pulse ring */}
       {!open && (
         <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }} transition={{ duration: 2.5, repeat: Infinity }}
-          style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9998, width: 58, height: 58, borderRadius: '50%', border: '2px solid rgba(0,229,160,0.4)', pointerEvents: 'none' }} />
+          style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9998,
+            width: 58, height: 58, borderRadius: '50%',
+            border: '2px solid rgba(0,229,160,0.4)', pointerEvents: 'none' }} />
       )}
     </>
   )
