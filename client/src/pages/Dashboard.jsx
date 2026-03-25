@@ -631,12 +631,12 @@ function AIBubble({ stats, transactions }) {
         {open && (
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            style={{ position: 'fixed', bottom: 90, right: 24, width: 370, zIndex: 9998,
+            style={{ position: 'fixed', bottom: 70, right: 24, width: 340, zIndex: 9998,
               background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
               boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,160,0.05)', overflow: 'hidden' }}>
 
             {/* Header */}
-            <div style={{ background: 'linear-gradient(135deg, rgba(0,229,160,0.12), rgba(124,58,237,0.08))', padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(0,229,160,0.12), rgba(124,58,237,0.08))', padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}
@@ -652,7 +652,7 @@ function AIBubble({ stats, transactions }) {
             </div>
 
             {/* Messages area */}
-            <div style={{ padding: '16px 16px 8px', minHeight: 200, maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ padding: '16px', minHeight: 150, maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
               {/* Welcome state */}
               {!hasGenerated && !loading && (
@@ -693,7 +693,7 @@ function AIBubble({ stats, transactions }) {
                       background: card.bg,
                       border: `1px solid ${card.border}`,
                       borderRadius: 14,
-                      padding: '12px 14px',
+                      padding: '20px 20px',
                       display: 'flex',
                       gap: 10,
                       alignItems: 'flex-start'
@@ -722,7 +722,7 @@ function AIBubble({ stats, transactions }) {
             </div>
 
             {/* Action area */}
-            <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
+            <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
               <motion.button className="btn btn-mint" onClick={generate} disabled={loading}
                 style={{ flex: 1, padding: '12px', fontSize: 13 }} whileTap={{ scale: 0.97 }}>
                 {loading
