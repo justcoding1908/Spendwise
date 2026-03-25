@@ -18,34 +18,54 @@ export const getFinancialInsight = async (req, res) => {
     const categoryBreakdown = Object.entries(byCategory || {})
       .sort((a, b) => b[1] - a[1])
       .map(([cat, amt]) => `${cat}: ₹${amt}`)
-      .join(', ')
+      .join('\n')
 
-    const prompt = `You are a friendly, witty financial buddy for a college student in India who tracks UPI spending. Talk like a cool friend — casual, fun, slightly roast-y but helpful. Use Indian context.
+    const prompt = `You are a brutally honest but caring financial coach for a college student in India. You talk like a close friend — casual, witty, Gen-Z energy. You know Indian apps, Indian prices, Indian student life.
 
-Their spending this month:
-- Total spent: ₹${totalSpent}
-- Number of transactions: ${transactionCount || 0}
-- Top category: ${topCategory || 'Unknown'}
-- Breakdown: ${categoryBreakdown || 'No data'}
+Here is their UPI spending this month:
+Total spent: ₹${totalSpent}
+Transactions: ${transactionCount || 0}
+Top category: ${topCategory || 'Unknown'}
+Category breakdown:
+${categoryBreakdown || 'No data'}
 
-Give exactly 3 savage-but-helpful money saving tips. Rules:
-- Talk like a friend texting them, NOT a banker
-- Use Indian slang naturally (bhai, yaar, bro) — but don't overdo it
-- Reference actual apps they use (Swiggy, Zomato, Amazon, Jio, Rapido)
-- Roast their spending a little but stay encouraging
-- Each tip max 2 sentences
-- Format: just 1. 2. 3. with no headers
-- End with ONE hype line to motivate them
-Example tone: "Bro ₹3k on Swiggy? That's literally a month of groceries 😭 Switch to cooking 3 days a week and watch that number drop."
-Return ONLY valid JSON array, zero explanation, zero markdown:
-[{"merchant":"Clean Merchant Name","amount":349.00,"category":"Bills","date":"2026-03-03T00:00:00Z","type":"debit"}]
-If nothing found: []`
+Your job: Give them a SHORT, punchy financial reality check. 
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS — use these exact emoji markers:
+
+💸 [One savage but funny one-liner roasting their biggest spend. Max 1 sentence.]
+
+📊 [Tip 1 — specific, actionable, references their actual categories. Max 2 sentences.]
+
+🎯 [Tip 2 — a concrete challenge or habit they can start TODAY. Max 2 sentences.]
+
+🔥 [Tip 3 — a money hack relevant to Indian students. Max 2 sentences.]
+
+⚡ [One short hype line to motivate them. Max 1 sentence.]
+
+RULES:
+- Use Indian context: Swiggy, Zomato, Jio, Rapido, IRCTC, UPI, etc.
+- Use Indian slang naturally: bhai, yaar, bro — but max once or twice total
+- Reference their ACTUAL numbers from the breakdown above
+- Be specific, not generic. "You spent ₹X on Y" not "you spend too much"
+- Each section separated by a blank line
+- NO numbered lists, NO headers, NO bullet points — just the emoji + text
+- Total response should be under 180 words`
 
     const response = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 600,
-      temperature: 0.7
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a witty, caring financial coach for Indian college students. You give sharp, specific, emoji-formatted advice. Never use numbered lists. Always reference actual spending numbers.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 400,
+      temperature: 0.75
     })
 
     const insight = response.choices[0].message.content
@@ -105,18 +125,12 @@ If no valid transactions found, return exactly: []`
 
     let transactions = []
     try {
-      // Remove markdown code blocks if present
       const cleaned = responseText.replace(/```json|```/g, '').trim()
       transactions = JSON.parse(cleaned)
     } catch {
-      // Try to extract JSON array from response
       const jsonMatch = responseText.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
-        try {
-          transactions = JSON.parse(jsonMatch[0])
-        } catch {
-          transactions = []
-        }
+        try { transactions = JSON.parse(jsonMatch[0]) } catch { transactions = [] }
       }
     }
 
@@ -138,47 +152,35 @@ export const detectAnomalies = async (req, res) => {
     }
 
     const categoryAverages = {
-      Food: 2000,
-      Shopping: 3000,
-      Transport: 1000,
-      Groceries: 2500,
-      Bills: 1500,
-      Health: 1000,
-      Entertainment: 800,
-      Travel: 3000
+      Food: 2000, Shopping: 3000, Transport: 1000,
+      Groceries: 2500, Bills: 1500, Health: 1000,
+      Entertainment: 800, Travel: 3000
     }
 
     const anomalies = []
 
-    // High spending detection
     Object.entries(byCategory || {}).forEach(([cat, spent]) => {
       const avg = categoryAverages[cat]
       if (avg && spent > avg * 1.5) {
         anomalies.push({
-          type: 'high_spending',
-          category: cat,
-          amount: spent,
+          type: 'high_spending', category: cat, amount: spent,
           message: `${cat} spending ₹${spent} is unusually high this month`,
           severity: spent > avg * 2 ? 'high' : 'medium'
         })
       }
     })
 
-    // Large single transaction detection
     transactions.forEach(tx => {
       if (tx.amount > 5000) {
         anomalies.push({
-          type: 'large_transaction',
-          category: tx.category,
-          amount: tx.amount,
-          merchant: tx.merchant,
+          type: 'large_transaction', category: tx.category,
+          amount: tx.amount, merchant: tx.merchant,
           message: `Large transaction: ₹${tx.amount} at ${tx.merchant}`,
           severity: 'medium'
         })
       }
     })
 
-    // Recurring merchant detection
     const merchantCount = {}
     transactions.forEach(tx => {
       const key = tx.merchant.toLowerCase().split(' ')[0]
@@ -187,14 +189,10 @@ export const detectAnomalies = async (req, res) => {
 
     Object.entries(merchantCount).forEach(([key, count]) => {
       if (count >= 2) {
-        const tx = transactions.find(t =>
-          t.merchant.toLowerCase().startsWith(key)
-        )
+        const tx = transactions.find(t => t.merchant.toLowerCase().startsWith(key))
         if (tx) {
           anomalies.push({
-            type: 'recurring',
-            merchant: tx.merchant,
-            count,
+            type: 'recurring', merchant: tx.merchant, count,
             message: `Recurring payment: ${tx.merchant} appears ${count} times`,
             severity: 'info'
           })
