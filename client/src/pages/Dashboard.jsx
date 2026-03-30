@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 import api from '../api'
@@ -7,7 +7,7 @@ import { CATEGORIES, CHART_COLORS, formatCurrency, formatDate, getGreeting } fro
 import { parseUPISMS } from '../utils/smsParser'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, LineChart, Line, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts'
 
 // ── Animated Counter ──────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ function ChartTip({ active, payload }) {
   )
 }
 
-// ── Floating 3D Coins ─────────────────────────────────────────────────────────
+// ── Floating Coins ────────────────────────────────────────────────────────────
 function FloatingCoins() {
   const coins = [
     { emoji: '₹', top: '10%', left: '3%', delay: 0, dur: 5 },
@@ -93,10 +93,7 @@ function HeroCard({ stats, user, onAddSMS }) {
         position: 'relative', overflow: 'hidden', cursor: 'default', marginBottom: 24,
         boxShadow: '0 0 0 1px rgba(0,229,160,0.05), 0 40px 80px rgba(0,0,0,0.5)' }}>
 
-      {/* Shimmer overlay */}
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,229,160,0.04) 0%, transparent 50%, rgba(124,58,237,0.04) 100%)', borderRadius: 28, pointerEvents: 'none' }} />
-
-      {/* Grid lines */}
       <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px)', backgroundSize: '40px 40px', borderRadius: 28, pointerEvents: 'none' }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>
@@ -183,8 +180,179 @@ function StatCards({ stats }) {
   )
 }
 
+// ── Receipt Scanner Modal ─────────────────────────────────────────────────────
+function ReceiptScanner({ onAdd, onClose }) {
+  const [image, setImage] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [scanning, setScanning] = useState(false)
+  const [result, setResult] = useState(null)
+  const [category, setCategory] = useState('')
+  const [error, setError] = useState('')
+  const fileRef = useRef(null)
+
+  const handleFile = (file) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setError('Please upload an image file'); return }
+    if (file.size > 5 * 1024 * 1024) { setError('Image too large — max 5MB'); return }
+    setError(''); setResult(null); setImage(file)
+    const reader = new FileReader()
+    reader.onload = (e) => setPreview(e.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  const handleDrop = (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]) }
+
+  const scan = async () => {
+    if (!image) return
+    setScanning(true); setError('')
+    try {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const base64 = e.target.result.split(',')[1]
+          const res = await api.post('/ai/scan-receipt', { imageBase64: base64, mimeType: image.type })
+          const r = res.data.receipt
+          setResult(r)
+          setCategory(r.category || 'Other')
+        } catch (err) {
+          setError(err.response?.data?.message || 'Could not read receipt. Try a clearer photo.')
+        }
+        setScanning(false)
+      }
+      reader.readAsDataURL(image)
+    } catch {
+      setError('Something went wrong. Try again.')
+      setScanning(false)
+    }
+  }
+
+  const confirm = async () => {
+    if (!result) return
+    try {
+      await api.post('/transactions', {
+        merchant: result.vendor,
+        amount: result.amount,
+        category,
+        date: result.date,
+        type: 'debit',
+        note: 'Added via receipt scan'
+      })
+      toast.success(`₹${result.amount} at ${result.vendor} added! 🧾`)
+      onAdd(); onClose()
+    } catch { toast.error('Failed to add transaction') }
+  }
+
+  const CATS = ['Food','Transport','Travel','Shopping','Groceries','Bills','Health','Entertainment','Other']
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+        backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+
+      <motion.div initial={{ scale: 0.93, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.93, y: 20 }}
+        style={{ background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
+          width: '100%', maxWidth: 460, overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.7)' }}>
+
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(135deg, rgba(0,229,160,0.08), rgba(124,58,237,0.06))',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700 }}>🧾 Scan Receipt</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>Upload a photo — AI extracts everything</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 20 }}>✕</button>
+        </div>
+
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Drop zone */}
+          {!result && (
+            <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileRef.current?.click()}
+              style={{ border: `2px dashed ${preview ? 'rgba(0,229,160,0.4)' : 'var(--border)'}`,
+                borderRadius: 16, padding: preview ? 0 : '36px 24px', textAlign: 'center',
+                cursor: 'pointer', transition: 'all 0.2s', overflow: 'hidden',
+                background: preview ? 'transparent' : 'var(--surface-2)' }}>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment"
+                style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
+              {preview ? (
+                <img src={preview} alt="Receipt" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 14, display: 'block' }} />
+              ) : (
+                <>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-2)', fontWeight: 600, marginBottom: 6 }}>Click to upload or drag & drop</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>JPG, PNG up to 5MB</div>
+                  <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--surface-3)', padding: '4px 10px', borderRadius: 20 }}>📸 Camera</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--surface-3)', padding: '4px 10px', borderRadius: 20 }}>🖼️ Gallery</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, fontSize: 13, color: '#ef4444' }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {preview && !result && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-outline" onClick={() => { setPreview(null); setImage(null) }} style={{ padding: '12px 20px', fontSize: 13 }}>🔄 Retake</button>
+              <button className="btn btn-mint" onClick={scan} disabled={scanning} style={{ flex: 1, padding: '12px', fontSize: 13 }}>
+                {scanning
+                  ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><div className="spinner" /> Scanning receipt...</span>
+                  : '🔍 Scan with AI'}
+              </button>
+            </div>
+          )}
+
+          {result && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ padding: 16, background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 14 }}>
+                <div style={{ fontSize: 11, color: 'var(--mint)', fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>✅ RECEIPT SCANNED</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {[['VENDOR', result.vendor, 'var(--text)', false], ['AMOUNT', `₹${result.amount}`, '#00e5a0', true], ['DATE', result.date, 'var(--text-2)', false], ['AI CATEGORY', result.category, 'var(--text-2)', false]].map(([label, val, color, mono]) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color, fontFamily: mono ? 'var(--font-mono)' : 'inherit' }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">Confirm Category</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                  {CATS.map(cat => (
+                    <button key={cat} onClick={() => setCategory(cat)}
+                      style={{ padding: '6px 14px', borderRadius: 20,
+                        border: `1px solid ${category === cat ? 'var(--mint)' : 'var(--border)'}`,
+                        background: category === cat ? 'var(--mint-dim)' : 'transparent',
+                        color: category === cat ? 'var(--mint)' : 'var(--text-3)',
+                        fontSize: 12, fontWeight: category === cat ? 700 : 500, cursor: 'pointer', transition: 'all 0.15s' }}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button className="btn btn-outline" onClick={() => { setResult(null); setPreview(null); setImage(null) }} style={{ padding: '12px 20px', fontSize: 13 }}>🔄 Rescan</button>
+                <button className="btn btn-mint" onClick={confirm} style={{ flex: 1, padding: '12px', fontSize: 13 }}>✅ Add Transaction</button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ── SMS Parser Section ────────────────────────────────────────────────────────
-function SMSSection({ onSave, id }) {
+function SMSSection({ onSave, onOpenReceiptScanner }) {
   const [tab, setTab] = useState('sms')
   const [smsText, setSmsText] = useState('')
   const [parsed, setParsed] = useState([])
@@ -212,27 +380,41 @@ function SMSSection({ onSave, id }) {
   const handleManual = async () => {
     if (!manual.merchant || !manual.amount) { toast.error('Merchant and amount required'); return }
     try {
-      await api.post('/transactions', { merchant: manual.merchant, amount: parseFloat(manual.amount), category: manual.category, date: manual.date ? new Date(manual.date).toISOString() : new Date().toISOString(), type: 'debit', note: manual.note })
+      await api.post('/transactions', {
+        merchant: manual.merchant, amount: parseFloat(manual.amount),
+        category: manual.category,
+        date: manual.date ? new Date(manual.date).toISOString() : new Date().toISOString(),
+        type: 'debit', note: manual.note
+      })
       toast.success('Added! 🎯'); onSave()
       setManual({ merchant: '', amount: '', category: 'Food', date: '', note: '' })
     } catch { toast.error('Failed to add') }
   }
 
   return (
-    <motion.div id={id} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
+    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}
       className="section" style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <div className="section-title">📱 Add Transactions</div>
           <div className="section-sub">Paste your SBI UPI SMS or add manually</div>
         </div>
-        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 4, borderRadius: 10 }}>
-          {[['sms', '📱 Paste SMS'], ['manual', '✏️ Manual']].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)}
-              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-body)', transition: 'all 0.2s', background: tab === id ? 'var(--mint)' : 'transparent', color: tab === id ? '#000' : 'var(--text-3)' }}>
-              {label}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 4, borderRadius: 10 }}>
+            {[['sms', '📱 Paste SMS'], ['manual', '✏️ Manual']].map(([id, label]) => (
+              <button key={id} onClick={() => setTab(id)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                  fontFamily: 'var(--font-body)', transition: 'all 0.2s',
+                  background: tab === id ? 'var(--mint)' : 'transparent',
+                  color: tab === id ? '#000' : 'var(--text-3)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={onOpenReceiptScanner}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            🧾 Scan Receipt
+          </button>
         </div>
       </div>
 
@@ -243,11 +425,10 @@ function SMSSection({ onSave, id }) {
             <div>
               <label className="input-label">Paste SBI UPI messages</label>
               <textarea className="input" style={{ height: 260 }}
-                placeholder={"Dear UPI user A/C XXXXX debited by 349.00 on date 03Mar26 trf to Jio Prepaid Rech Refno 606239689420 If not u? call-1800111109 for other services-18001234-SBI\n\nPaste multiple messages..."}
+                placeholder={"Dear UPI user A/C XXXXX debited by 349.00 on date 03Mar26 trf to Jio Prepaid Rech Refno 606239689420\n\nPaste multiple messages..."}
                 value={smsText} onChange={handleChange} />
               <motion.button className="btn btn-mint" style={{ width: '100%', marginTop: 12, padding: '13px' }}
-                onClick={handleSave} disabled={!parsed.length || saving}
-                whileTap={{ scale: 0.98 }}>
+                onClick={handleSave} disabled={!parsed.length || saving} whileTap={{ scale: 0.98 }}>
                 {saving
                   ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><div className="spinner" />Saving...</span>
                   : parsed.length > 0 ? `Save ${parsed.length} transaction${parsed.length !== 1 ? 's' : ''} →` : 'Paste SMS above first'}
@@ -376,8 +557,7 @@ function TxnsSection({ transactions, onDelete }) {
                 return (
                   <motion.div key={tx.id} className="tx-row" layout
                     initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20, height: 0 }}
-                    transition={{ delay: i * 0.025 }}
-                    style={{ justifyContent: 'space-between' }}>
+                    transition={{ delay: i * 0.025 }} style={{ justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <motion.div className="cat-dot" whileHover={{ scale: 1.15, rotate: 10 }}
                         style={{ background: conf.bg, color: conf.color, width: 40, height: 40, borderRadius: 12 }}>
@@ -404,7 +584,7 @@ function TxnsSection({ transactions, onDelete }) {
             </AnimatePresence>
           </div>
           {filtered.length > 8 && (
-            <motion.button className="btn btn-ghost" onClick={() => setShowAll(!showAll)} style={{ width: '100%', marginTop: 12, padding: '12px' }} whileHover={{ background: 'var(--surface-2)' }}>
+            <motion.button className="btn btn-ghost" onClick={() => setShowAll(!showAll)} style={{ width: '100%', marginTop: 12, padding: '12px' }}>
               {showAll ? '↑ Show less' : `↓ Show all ${filtered.length} transactions`}
             </motion.button>
           )}
@@ -565,8 +745,7 @@ function BudgetSection({ stats }) {
   )
 }
 
-// ── AI Floating Bubble ────────────────────────────────────────────────────────
-// ── AI Floating Bubble ────────────────────────────────────────────────────────
+// ── AI Bubble ─────────────────────────────────────────────────────────────────
 function parseInsight(text) {
   if (!text) return []
   const sections = [
@@ -576,13 +755,11 @@ function parseInsight(text) {
     { emoji: '🔥', color: '#f97316', bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.15)' },
     { emoji: '⚡', color: '#eab308', bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.15)' },
   ]
-  return sections
-    .map(s => {
-      const regex = new RegExp(`${s.emoji}\\s*(.+?)(?=💸|📊|🎯|🔥|⚡|$)`, 's')
-      const match = text.match(regex)
-      return match ? { ...s, text: match[1].trim() } : null
-    })
-    .filter(Boolean)
+  return sections.map(s => {
+    const regex = new RegExp(`${s.emoji}\\s*(.+?)(?=💸|📊|🎯|🔥|⚡|$)`, 's')
+    const match = text.match(regex)
+    return match ? { ...s, text: match[1].trim() } : null
+  }).filter(Boolean)
 }
 
 function AIBubble({ stats, transactions }) {
@@ -604,11 +781,8 @@ function AIBubble({ stats, transactions }) {
       })
       const text = res.data.insight
       setInsight(text)
-      // Reveal cards one by one with delay
       const parsed = parseInsight(text)
-      parsed.forEach((_, i) => {
-        setTimeout(() => setVisibleCards(i + 1), i * 300)
-      })
+      parsed.forEach((_, i) => setTimeout(() => setVisibleCards(i + 1), i * 300))
     } catch { toast.error('AI is sleeping 😴 Try again!') }
     setLoading(false)
   }
@@ -617,7 +791,6 @@ function AIBubble({ stats, transactions }) {
 
   return (
     <>
-      {/* Backdrop */}
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -626,38 +799,31 @@ function AIBubble({ stats, transactions }) {
         )}
       </AnimatePresence>
 
-      {/* Chat panel */}
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            style={{ position: 'fixed', bottom: 70, right: 24, width: 340, zIndex: 9998,
+            style={{ position: 'fixed', bottom: 90, right: 24, width: 370, zIndex: 9998,
               background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
-              boxShadow: '0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,229,160,0.05)', overflow: 'hidden' }}>
+              boxShadow: '0 32px 80px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
 
-            {/* Header */}
             <div style={{ background: 'linear-gradient(135deg, rgba(0,229,160,0.12), rgba(124,58,237,0.08))', padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 3, repeat: Infinity }}
-                    style={{ fontSize: 28 }}>🤖</motion.div>
+                  <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ duration: 3, repeat: Infinity }} style={{ fontSize: 28 }}>🤖</motion.div>
                   <div>
                     <div style={{ fontFamily: 'Plus Jakarta Sans', fontSize: 15, fontWeight: 700 }}>SpendWise AI</div>
                     <div style={{ fontSize: 11, color: '#00e5a0', fontWeight: 600 }}>● online · Powered by Groq</div>
                   </div>
                 </div>
-                <button onClick={() => setOpen(false)}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
+                <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 18, padding: 4 }}>✕</button>
               </div>
             </div>
 
-            {/* Messages area */}
-            <div style={{ padding: '16px', minHeight: 150, maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-              {/* Welcome state */}
+            <div style={{ padding: '16px', minHeight: 150, maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {!hasGenerated && !loading && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-3)' }}>
+                  style={{ textAlign: 'center', padding: '24px 16px' }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🤖</div>
                   <div style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-2)' }}>
                     Hey! I'm your AI finance buddy.<br />
@@ -667,70 +833,35 @@ function AIBubble({ stats, transactions }) {
                 </motion.div>
               )}
 
-              {/* Loading state */}
               {loading && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[1, 2, 3].map(i => (
-                    <motion.div key={i}
-                      animate={{ opacity: [0.4, 0.8, 0.4] }}
-                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
+                    <motion.div key={i} animate={{ opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.2 }}
                       style={{ height: 64, borderRadius: 14, background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
                   ))}
-                  <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
-                    Analyzing your spending... 🔍
-                  </div>
+                  <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Analyzing your spending... 🔍</div>
                 </div>
               )}
 
-              {/* Insight cards */}
-              {cards.length > 0 && cards.map((card, i) => (
-                i < visibleCards && (
-                  <motion.div key={i}
-                    initial={{ opacity: 0, y: 12, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ duration: 0.35, ease: 'easeOut' }}
-                    style={{
-                      background: card.bg,
-                      border: `1px solid ${card.border}`,
-                      borderRadius: 14,
-                      padding: '20px 20px',
-                      display: 'flex',
-                      gap: 10,
-                      alignItems: 'flex-start'
-                    }}>
-                    {/* Emoji badge */}
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 10, flexShrink: 0,
-                      background: `${card.color}22`,
-                      border: `1px solid ${card.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 16
-                    }}>
-                      {card.emoji}
-                    </div>
-                    {/* Text */}
-                    <div style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-2)', paddingTop: 2 }}>
-                      {/* Last card (⚡ hype line) gets special styling */}
-                      {card.emoji === '⚡'
-                        ? <strong style={{ color: card.color, fontSize: 13 }}>{card.text}</strong>
-                        : card.text
-                      }
-                    </div>
-                  </motion.div>
-                )
+              {cards.map((card, i) => i < visibleCards && (
+                <motion.div key={i} initial={{ opacity: 0, y: 12, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.35 }}
+                  style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: 14, padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: `${card.color}22`, border: `1px solid ${card.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                    {card.emoji}
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-2)', paddingTop: 2 }}>
+                    {card.emoji === '⚡' ? <strong style={{ color: card.color }}>{card.text}</strong> : card.text}
+                  </div>
+                </motion.div>
               ))}
             </div>
 
-            {/* Action area */}
-            <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
-              <motion.button className="btn btn-mint" onClick={generate} disabled={loading}
-                style={{ flex: 1, padding: '12px', fontSize: 13 }} whileTap={{ scale: 0.97 }}>
-                {loading
-                  ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Thinking...</span>
+            <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <motion.button className="btn btn-mint" onClick={generate} disabled={loading} style={{ width: '100%', padding: '12px', fontSize: 13 }} whileTap={{ scale: 0.97 }}>
+                {loading ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Thinking...</span>
                   : hasGenerated ? '🔄 Ask again' : '⚡ Get my roast'}
               </motion.button>
             </div>
-
             <div style={{ padding: '0 16px 14px', fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
               🔒 Only spending totals sent · SMS stays on your device
             </div>
@@ -738,27 +869,16 @@ function AIBubble({ stats, transactions }) {
         )}
       </AnimatePresence>
 
-      {/* Floating button */}
-      <motion.button onClick={() => setOpen(!open)}
-        animate={{ scale: open ? 0.9 : 1 }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
-        style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer',
-          background: 'linear-gradient(135deg, #00e5a0, #00c5ff)',
-          boxShadow: '0 8px 32px rgba(0,229,160,0.4), 0 0 0 1px rgba(0,229,160,0.3)',
-          fontSize: 26, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.2 }}>
-          {open ? '✕' : '🤖'}
-        </motion.span>
+      <motion.button onClick={() => setOpen(!open)} animate={{ scale: open ? 0.9 : 1 }} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}
+        style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          background: 'linear-gradient(135deg, #00e5a0, #00c5ff)', boxShadow: '0 8px 32px rgba(0,229,160,0.4)', fontSize: 26,
+          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.2 }}>{open ? '✕' : '🤖'}</motion.span>
       </motion.button>
 
-      {/* Pulse ring */}
       {!open && (
         <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }} transition={{ duration: 2.5, repeat: Infinity }}
-          style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9998,
-            width: 58, height: 58, borderRadius: '50%',
-            border: '2px solid rgba(0,229,160,0.4)', pointerEvents: 'none' }} />
+          style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9998, width: 58, height: 58, borderRadius: '50%', border: '2px solid rgba(0,229,160,0.4)', pointerEvents: 'none' }} />
       )}
     </>
   )
@@ -778,9 +898,7 @@ function Navbar({ user, onLogout }) {
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-          <span style={{ fontSize: 16 }}>👤</span> {user?.name?.split(' ')[0]}
-        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-3)' }}><span style={{ fontSize: 16 }}>👤</span> {user?.name?.split(' ')[0]}</div>
         <button className="btn btn-ghost btn-sm" onClick={onLogout}>Sign out</button>
       </div>
     </motion.nav>
@@ -793,6 +911,7 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState([])
   const [stats, setStats] = useState({ totalSpent: 0, count: 0, byCategory: {}, topCategory: null, biggestTransaction: 0 })
   const [loading, setLoading] = useState(true)
+  const [showReceiptScanner, setShowReceiptScanner] = useState(false)  // ← state lives here
 
   const fetchData = useCallback(async () => {
     try {
@@ -817,7 +936,6 @@ export default function Dashboard() {
   }
 
   const handleLogout = () => { logout(); toast.success('See ya! 👋') }
-
   const scrollToSMS = () => document.getElementById('sms-section')?.scrollIntoView({ behavior: 'smooth' })
 
   if (loading) return (
@@ -836,36 +954,39 @@ export default function Dashboard() {
       <Navbar user={user} onLogout={handleLogout} />
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 20px 100px', position: 'relative', zIndex: 1 }}>
-
-        {/* 3D Hero */}
         <div id="hero">
           <HeroCard stats={stats} user={user} onAddSMS={scrollToSMS} />
           <StatCards stats={stats} />
         </div>
 
-        {/* SMS Parser */}
         <div id="sms-section">
-          <SMSSection onSave={fetchData} />
+          {/* onOpenReceiptScanner prop passes the setter down */}
+          <SMSSection onSave={fetchData} onOpenReceiptScanner={() => setShowReceiptScanner(true)} />
         </div>
 
-        {/* Transactions */}
         <div id="txns-section">
           <TxnsSection transactions={transactions} onDelete={handleDelete} />
         </div>
 
-        {/* Analytics */}
         <div id="analytics-section">
           <AnalyticsSection transactions={transactions} stats={stats} />
         </div>
 
-        {/* Budget */}
         <div id="budget-section">
           <BudgetSection stats={stats} />
         </div>
-
       </main>
 
-      {/* AI Floating Bubble */}
+      {/* Receipt Scanner Modal — renders at top level in Dashboard */}
+      <AnimatePresence>
+        {showReceiptScanner && (
+          <ReceiptScanner
+            onAdd={fetchData}
+            onClose={() => setShowReceiptScanner(false)}
+          />
+        )}
+      </AnimatePresence>
+
       <AIBubble stats={stats} transactions={transactions} />
     </div>
   )
