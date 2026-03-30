@@ -207,3 +207,84 @@ export const detectAnomalies = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
+
+// POST /api/ai/scan-receipt
+export const scanReceipt = async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body
+
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: 'Image required' })
+    }
+
+    const response = await groq.chat.completions.create({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`
+              }
+            },
+            {
+              type: 'text',
+              text: `You are a receipt parser. Extract information from this receipt image.
+
+Respond ONLY with a valid JSON object. No explanation. No markdown. No code blocks.
+
+Extract:
+- vendor: store/restaurant name (string)
+- amount: total amount paid as a number (just the final total, not subtotal)
+- date: in YYYY-MM-DD format (if not visible use today: ${new Date().toISOString().split('T')[0]})
+- category: one of Food, Transport, Travel, Shopping, Groceries, Bills, Health, Entertainment, Other
+
+Category guide:
+- Food: restaurants, cafes, fast food, dhabas, hotels
+- Groceries: supermarkets, kirana stores, DMart, BigBasket
+- Health: pharmacy, medical, clinic, hospital
+- Shopping: clothing, electronics, general retail
+- Bills: utility, recharge, subscription
+- Entertainment: movies, events, games
+
+Example response:
+{"vendor":"Dominos Pizza","amount":349.00,"date":"2026-03-25","category":"Food"}
+
+If you cannot read the receipt clearly, return:
+{"error":"Could not read receipt clearly"}`
+            }
+          ]
+        }
+      ],
+      max_tokens: 200,
+      temperature: 0.1
+    })
+
+    const responseText = response.choices[0].message.content.trim()
+
+    let result
+    try {
+      const cleaned = responseText.replace(/```json|```/g, '').trim()
+      result = JSON.parse(cleaned)
+    } catch {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0])
+      } else {
+        return res.status(422).json({ success: false, message: 'Could not parse receipt' })
+      }
+    }
+
+    if (result.error) {
+      return res.status(422).json({ success: false, message: result.error })
+    }
+
+    res.json({ success: true, receipt: result })
+
+  } catch (error) {
+    console.error('Receipt scan error:', error)
+    res.status(500).json({ success: false, message: 'Failed to scan receipt' })
+  }
+}
