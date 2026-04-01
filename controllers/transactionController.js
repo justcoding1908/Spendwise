@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js'
+import supabase from '../config/supabase.js'
 
 // GET /api/transactions - with optional month/year filter
 export const getTransactions = async (req, res) => {
