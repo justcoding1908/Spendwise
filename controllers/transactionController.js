@@ -3,6 +3,10 @@ import supabase from '../config/supabase.js'
 // GET /api/transactions - with optional month/year filter
 export const getTransactions = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' })
+    }
+
     const month = req.query.month
     const year = req.query.year
     let query = supabase
@@ -20,9 +24,13 @@ export const getTransactions = async (req, res) => {
 
     const { data, error } = await query.order('date', { ascending: false })
 
-    if (error) return res.status(500).json({ success: false, message: error.message })
+    if (error) {
+      console.error('Transaction fetch error:', error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
     res.json({ success: true, transactions: data })
   } catch (error) {
+    console.error('getTransactions error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -59,7 +67,10 @@ export const getStats = async (req, res) => {
       .gte('date', startDate)   // 🧠 gte = "greater than or equal" = >=
       .lte('date', endDate)     // 🧠 lte = "less than or equal" = <=
 
-    if (error) return res.status(500).json({ success: false, message: error.message })
+    if (error) {
+      console.error('Get stats error:', error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
 
     const totalSpent = data.reduce((s, t) => s + Number(t.amount), 0)
 
@@ -91,10 +102,10 @@ export const getStats = async (req, res) => {
 // POST /api/transactions - create single transaction
 export const createTransaction = async (req, res) => {
   try {
-    const { amount, category, description, date } = req.body
+    const { amount, category, date, merchant, note, type, description } = req.body
     
     if (!amount || !category || !date) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' })
+      return res.status(400).json({ success: false, message: 'Missing required fields: amount, category, date' })
     }
 
     const { data, error } = await supabase
@@ -103,14 +114,21 @@ export const createTransaction = async (req, res) => {
         user_id: req.user.id,
         amount: Number(amount),
         category,
-        description,
-        date
+        description: description || merchant || note || '',
+        date,
+        merchant: merchant || '',
+        note: note || '',
+        type: type || 'debit'
       }])
       .select()
 
-    if (error) return res.status(500).json({ success: false, message: error.message })
+    if (error) {
+      console.error('Create transaction error:', error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
     res.json({ success: true, transaction: data[0] })
   } catch (error) {
+    console.error('createTransaction error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -125,9 +143,15 @@ export const createBulkTransactions = async (req, res) => {
     }
 
     const txWithUserId = transactions.map(tx => ({
-      ...tx,
       user_id: req.user.id,
-      amount: Number(tx.amount)
+      amount: Number(tx.amount),
+      category: tx.category || 'Other',
+      date: tx.date,
+      merchant: tx.merchant || '',
+      note: tx.note || '',
+      type: tx.type || 'debit',
+      description: tx.description || tx.merchant || '',
+      raw_sms: tx.raw_sms || ''
     }))
 
     const { data, error } = await supabase
@@ -135,9 +159,13 @@ export const createBulkTransactions = async (req, res) => {
       .insert(txWithUserId)
       .select()
 
-    if (error) return res.status(500).json({ success: false, message: error.message })
+    if (error) {
+      console.error('Bulk create transactions error:', error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
     res.json({ success: true, transactions: data })
   } catch (error) {
+    console.error('createBulkTransactions error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
@@ -147,15 +175,23 @@ export const deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params
 
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Transaction ID required' })
+    }
+
     const { error } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id)
       .eq('user_id', req.user.id)
 
-    if (error) return res.status(500).json({ success: false, message: error.message })
+    if (error) {
+      console.error('Delete transaction error:', error)
+      return res.status(500).json({ success: false, message: error.message })
+    }
     res.json({ success: true, message: 'Transaction deleted' })
   } catch (error) {
+    console.error('deleteTransaction error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
