@@ -1,6 +1,6 @@
 import supabase from '../config/supabase.js'
 
-// GET /api/transactions - with optional month/year filter
+// GET /api/transactions
 export const getTransactions = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
@@ -8,17 +8,16 @@ export const getTransactions = async (req, res) => {
     }
 
     const month = req.query.month
-    const year = req.query.year
+    const year  = req.query.year
+
     let query = supabase
       .from('transactions')
       .select('*')
       .eq('user_id', req.user.id)
 
     if (month && year) {
-      // 🧠 LEARNING: JS Date months are 0-indexed but we're sending 1-indexed
-      // So we subtract 1: month=4 (April) → new Date(2026, 3, 1) = April 1st ✅
       const start = `${year}-${String(month).padStart(2, '0')}-01`
-      const end = new Date(year, parseInt(month), 0).toISOString().split('T')[0]
+      const end   = new Date(year, parseInt(month), 0).toISOString().split('T')[0]
       query = query.gte('date', start).lte('date', end)
     }
 
@@ -28,7 +27,9 @@ export const getTransactions = async (req, res) => {
       console.error('Transaction fetch error:', error)
       return res.status(500).json({ success: false, message: error.message })
     }
+
     res.json({ success: true, transactions: data })
+
   } catch (error) {
     console.error('getTransactions error:', error)
     res.status(500).json({ success: false, message: error.message })
@@ -38,34 +39,21 @@ export const getTransactions = async (req, res) => {
 // GET /api/transactions/stats
 export const getStats = async (req, res) => {
   try {
-    // 🧠 LEARNING: req.query reads URL parameters
-    // When frontend calls /api/transactions/stats?month=4&year=2026
-    // req.query = { month: '4', year: '2026' }
-    // Note: they come as STRINGS, so we use parseInt() to convert to numbers
-    const now = new Date()
+    const now   = new Date()
     const month = parseInt(req.query.month) || now.getMonth() + 1
     const year  = parseInt(req.query.year)  || now.getFullYear()
 
-    // 🧠 LEARNING: Building date range for SQL filtering
-    // padStart(2,'0') ensures "4" becomes "04" — SQL needs YYYY-MM-DD format
-    // So April 2026 becomes: startDate = "2026-04-01"
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const endDate   = new Date(year, month, 0).toISOString().split('T')[0]
 
-    // 🧠 LEARNING: The "day 0 trick"
-    // new Date(2026, 4, 0) means "day 0 of May 2026"
-    // Day 0 of any month = last day of previous month
-    // So this gives us April 30, 2026 automatically — works for any month!
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0]
-
-    // helpful log — check your terminal when this runs
     console.log(`📊 Stats for: ${startDate} to ${endDate}`)
 
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
       .eq('user_id', req.user.id)
-      .gte('date', startDate)   // 🧠 gte = "greater than or equal" = >=
-      .lte('date', endDate)     // 🧠 lte = "less than or equal" = <=
+      .gte('date', startDate)
+      .lte('date', endDate)
 
     if (error) {
       console.error('Get stats error:', error)
@@ -80,7 +68,7 @@ export const getStats = async (req, res) => {
     })
 
     const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0]
-    const biggest = data.reduce((max, t) => Number(t.amount) > max ? Number(t.amount) : max, 0)
+    const biggest     = data.reduce((max, t) => Number(t.amount) > max ? Number(t.amount) : max, 0)
 
     res.json({
       success: true,
@@ -90,35 +78,44 @@ export const getStats = async (req, res) => {
         topCategory: topCategory ? topCategory[0] : null,
         biggestTransaction: biggest,
         byCategory,
-        month,   // 🧠 send these back so frontend knows what period this data is for
+        month,
         year
       }
     })
+
   } catch (error) {
+    console.error('getStats error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
 
-// POST /api/transactions - create single transaction
+// POST /api/transactions — single transaction (manual entry + receipt scan)
 export const createTransaction = async (req, res) => {
   try {
-    const { amount, category, date, merchant, note, type, description } = req.body
-    
-    if (!amount || !category || !date) {
-      return res.status(400).json({ success: false, message: 'Missing required fields: amount, category, date' })
+    const { merchant, amount, category, date, type, note } = req.body
+
+    if (!merchant || !amount || !category || !date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: merchant, amount, category, date'
+      })
     }
+
+    // 🧠 date arrives as either ISO string ("2026-04-01T00:00:00Z")
+    // or plain date string ("2026-04-01") — extract just the date part
+    const dateOnly = date.split('T')[0]
 
     const { data, error } = await supabase
       .from('transactions')
       .insert([{
-        user_id: req.user.id,
-        amount: Number(amount),
-        category,
-        description: description || merchant || note || '',
-        date,
-        merchant: merchant || '',
-        note: note || '',
-        type: type || 'debit'
+        user_id:     req.user.id,
+        merchant:    merchant,
+        amount:      Number(amount),
+        category:    category,
+        date:        dateOnly,
+        type:        type || 'debit',
+        note:        note || '',
+        description: merchant   // keep description in sync with merchant
       }])
       .select()
 
@@ -126,44 +123,50 @@ export const createTransaction = async (req, res) => {
       console.error('Create transaction error:', error)
       return res.status(500).json({ success: false, message: error.message })
     }
+
     res.json({ success: true, transaction: data[0] })
+
   } catch (error) {
     console.error('createTransaction error:', error)
     res.status(500).json({ success: false, message: error.message })
   }
 }
 
-// POST /api/transactions/bulk - create multiple transactions
+// POST /api/transactions/bulk — SMS parsed batch (this is what SMSSection uses)
 export const createBulkTransactions = async (req, res) => {
   try {
     const { transactions } = req.body
-    
+
     if (!Array.isArray(transactions) || transactions.length === 0) {
       return res.status(400).json({ success: false, message: 'Invalid transactions array' })
     }
 
-    const txWithUserId = transactions.map(tx => ({
-      user_id: req.user.id,
-      amount: Number(tx.amount),
-      category: tx.category || 'Other',
-      date: tx.date,
-      merchant: tx.merchant || '',
-      note: tx.note || '',
-      type: tx.type || 'debit',
-      description: tx.description || tx.merchant || '',
-      raw_sms: tx.raw_sms || ''
+    // 🧠 SMS parser sends: { merchant, amount, category, date (ISO), type, raw_sms }
+    // We map each one carefully — date comes as full ISO, we extract just the date part
+    const rows = transactions.map(tx => ({
+      user_id:     req.user.id,
+      merchant:    tx.merchant   || 'Unknown',
+      amount:      Number(tx.amount),
+      category:    tx.category   || 'Other',
+      date:        (tx.date || new Date().toISOString()).split('T')[0],
+      type:        tx.type       || 'debit',
+      note:        tx.note       || '',
+      description: tx.merchant   || 'Unknown',
+      raw_sms:     tx.raw_sms    || ''
     }))
 
     const { data, error } = await supabase
       .from('transactions')
-      .insert(txWithUserId)
+      .insert(rows)
       .select()
 
     if (error) {
-      console.error('Bulk create transactions error:', error)
+      console.error('Bulk create error:', error)
       return res.status(500).json({ success: false, message: error.message })
     }
-    res.json({ success: true, transactions: data })
+
+    res.json({ success: true, count: data.length, transactions: data })
+
   } catch (error) {
     console.error('createBulkTransactions error:', error)
     res.status(500).json({ success: false, message: error.message })
@@ -183,13 +186,15 @@ export const deleteTransaction = async (req, res) => {
       .from('transactions')
       .delete()
       .eq('id', id)
-      .eq('user_id', req.user.id)
+      .eq('user_id', req.user.id)  // 🔒 RLS double-check — only delete own transactions
 
     if (error) {
       console.error('Delete transaction error:', error)
       return res.status(500).json({ success: false, message: error.message })
     }
+
     res.json({ success: true, message: 'Transaction deleted' })
+
   } catch (error) {
     console.error('deleteTransaction error:', error)
     res.status(500).json({ success: false, message: error.message })
