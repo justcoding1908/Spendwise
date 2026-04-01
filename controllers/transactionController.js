@@ -1,3 +1,32 @@
+import { supabase } from '../config/supabase.js'
+
+// GET /api/transactions - with optional month/year filter
+export const getTransactions = async (req, res) => {
+  try {
+    const month = req.query.month
+    const year = req.query.year
+    let query = supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', req.user.id)
+
+    if (month && year) {
+      // 🧠 LEARNING: JS Date months are 0-indexed but we're sending 1-indexed
+      // So we subtract 1: month=4 (April) → new Date(2026, 3, 1) = April 1st ✅
+      const start = `${year}-${String(month).padStart(2, '0')}-01`
+      const end = new Date(year, parseInt(month), 0).toISOString().split('T')[0]
+      query = query.gte('date', start).lte('date', end)
+    }
+
+    const { data, error } = await query.order('date', { ascending: false })
+
+    if (error) return res.status(500).json({ success: false, message: error.message })
+    res.json({ success: true, transactions: data })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 // GET /api/transactions/stats
 export const getStats = async (req, res) => {
   try {
@@ -54,6 +83,78 @@ export const getStats = async (req, res) => {
         year
       }
     })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// POST /api/transactions - create single transaction
+export const createTransaction = async (req, res) => {
+  try {
+    const { amount, category, description, date } = req.body
+    
+    if (!amount || !category || !date) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' })
+    }
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([{
+        user_id: req.user.id,
+        amount: Number(amount),
+        category,
+        description,
+        date
+      }])
+      .select()
+
+    if (error) return res.status(500).json({ success: false, message: error.message })
+    res.json({ success: true, transaction: data[0] })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// POST /api/transactions/bulk - create multiple transactions
+export const createBulkTransactions = async (req, res) => {
+  try {
+    const { transactions } = req.body
+    
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid transactions array' })
+    }
+
+    const txWithUserId = transactions.map(tx => ({
+      ...tx,
+      user_id: req.user.id,
+      amount: Number(tx.amount)
+    }))
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert(txWithUserId)
+      .select()
+
+    if (error) return res.status(500).json({ success: false, message: error.message })
+    res.json({ success: true, transactions: data })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// DELETE /api/transactions/:id
+export const deleteTransaction = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+
+    if (error) return res.status(500).json({ success: false, message: error.message })
+    res.json({ success: true, message: 'Transaction deleted' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
