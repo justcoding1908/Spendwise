@@ -370,9 +370,30 @@ function SMSSection({ onSave, onOpenReceiptScanner }) {
     if (!parsed.length) return
     setSaving(true)
     try {
-      await api.post('/transactions/bulk', { transactions: parsed })
+      const res = await api.post('/transactions/bulk', { transactions: parsed })
+
+      // Find "Other" vendors to send to LLM categorizer
+      const savedTxns = res.data.transactions || []
+      const otherVendors = savedTxns
+        .filter(tx => tx.category === 'Other')
+        .reduce((acc, tx) => {
+          const existing = acc.find(v => v.merchant === tx.merchant)
+          if (existing) {
+            existing.ids.push(tx.id)
+          } else {
+            acc.push({
+              merchant: tx.merchant,
+              amount:   tx.amount,
+              date:     tx.date,
+              ids:      [tx.id]
+            })
+          }
+          return acc
+        }, [])
+
       toast.success(`${parsed.length} transactions saved! 🔥`)
-      onSave(); setSmsText(''); setParsed([]); setUnrecognized([])
+      onSave(otherVendors)
+      setSmsText(''); setParsed([]); setUnrecognized([])
     } catch { toast.error('Failed to save') }
     setSaving(false)
   }
@@ -884,6 +905,84 @@ function AIBubble({ stats, transactions }) {
   )
 }
 
+// ── Unknown Vendor Popup ─────────────────────────────────────────────────────
+function UnknownVendorPopup({ vendors, onFetchData, onComplete }) {
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [selected, setSelected] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const vendor = vendors[currentIdx]
+  const goNext = () => {
+    if (currentIdx < vendors.length - 1) {
+      setCurrentIdx(currentIdx + 1)
+      setSelected('')
+    } else {
+      onComplete()
+    }
+  }
+
+  const handleConfirm = async () => {
+    if (!selected) { toast.error('Pick a category first'); return }
+    setSaving(true)
+    try {
+      await Promise.all(
+        vendor.ids.map(id =>
+          api.patch(`/transactions/${id}/category`, { category: selected })
+        )
+      )
+      toast.success(`${vendor.merchant} → ${selected} ✅`)
+      goNext()
+    } catch { toast.error('Failed to update') }
+    setSaving(false)
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onComplete}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 5000, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} >
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
+          padding: 32, maxWidth: 420, width: '90%', zIndex: 5001, boxShadow: '0 40px 80px rgba(0,0,0,0.6)'
+        }} >
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>
+            Unknown Vendor · {currentIdx + 1}/{vendors.length}
+          </div>
+          <div style={{ fontFamily: 'Plus Jakarta Sans', fontSize: 24, fontWeight: 800, marginBottom: 4 }}>
+            {vendor.merchant}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            {formatCurrency(vendor.amount)} · {formatDate(vendor.date)}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label className="input-label">Pick a category</label>
+          <select className="input" value={selected} onChange={e => setSelected(e.target.value)}
+            style={{ fontSize: 13, padding: '10px 12px' }}>
+            <option value="">Select category...</option>
+            {Object.keys(CATEGORIES).filter(c => c !== 'Unusual' && c !== 'Other').map(c =>
+              <option key={c} value={c}>{CATEGORIES[c].emoji} {c}</option>
+            )}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <motion.button className="btn btn-ghost" onClick={goNext} style={{ flex: 1 }} whileTap={{ scale: 0.98 }}>
+            Skip
+          </motion.button>
+          <motion.button className="btn btn-mint" onClick={handleConfirm} disabled={!selected || saving} style={{ flex: 1, padding: '12px' }} whileTap={{ scale: 0.98 }}>
+            {saving ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Saving...</span> : 'Confirm'}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ── Navbar ────────────────────────────────────────────────────────────────────
 function Navbar({ user, onLogout }) {
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
@@ -912,6 +1011,8 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ totalSpent: 0, count: 0, byCategory: {}, topCategory: null, biggestTransaction: 0 })
   const [loading, setLoading] = useState(true)
   const [showReceiptScanner, setShowReceiptScanner] = useState(false)  // ← state lives here
+  const [showVendorPopup, setShowVendorPopup] = useState(false)
+  const [unknownVendors, setUnknownVendors] = useState([])
 
   const fetchData = useCallback(async () => {
     try {
@@ -961,7 +1062,16 @@ export default function Dashboard() {
 
         <div id="sms-section">
           {/* onOpenReceiptScanner prop passes the setter down */}
-          <SMSSection onSave={fetchData} onOpenReceiptScanner={() => setShowReceiptScanner(true)} />
+          <SMSSection
+            onSave={(otherVendors) => {
+              fetchData()
+              if (otherVendors?.length > 0) {
+                setUnknownVendors(otherVendors)
+                setShowVendorPopup(true)
+              }
+            }}
+            onOpenReceiptScanner={() => setShowReceiptScanner(true)}
+          />
         </div>
 
         <div id="txns-section">
@@ -983,6 +1093,19 @@ export default function Dashboard() {
           <ReceiptScanner
             onAdd={fetchData}
             onClose={() => setShowReceiptScanner(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showVendorPopup && unknownVendors.length > 0 && (
+          <UnknownVendorPopup
+            vendors={unknownVendors}
+            onFetchData={fetchData}
+            onComplete={() => {
+              setShowVendorPopup(false)
+              setUnknownVendors([])
+            }}
           />
         )}
       </AnimatePresence>

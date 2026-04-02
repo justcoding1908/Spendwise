@@ -1,5 +1,5 @@
 import express from 'express'
-import { getFinancialInsight, parseSMSWithAI, detectAnomalies, scanReceipt } from '../controllers/aiController.js'
+import { getFinancialInsight, parseSMSWithAI, detectAnomalies, scanReceipt, categorizeVendor  } from '../controllers/aiController.js'
 import protect from '../middleware/auth.js'
 
 const router = express.Router()

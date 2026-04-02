@@ -288,3 +288,89 @@ If you cannot read the receipt clearly, return:
     res.status(500).json({ success: false, message: 'Failed to scan receipt' })
   }
 }
+// POST /api/ai/categorize-vendor
+export const categorizeVendor = async (req, res) => {
+  try {
+    const { merchant, amount } = req.body
+
+    if (!merchant) {
+      return res.status(400).json({ success: false, message: 'Merchant name required' })
+    }
+
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert at categorizing Indian UPI payment merchants.
+You understand Indian business naming conventions, kirana stores, local shops, 
+dhabas, medical stores, and all types of Indian businesses.
+Always respond with valid JSON only. No explanation. No markdown.`
+        },
+        {
+          role: 'user',
+          content: `Categorize this Indian UPI merchant into exactly one category.
+
+Merchant name: "${merchant}"
+Amount paid: ₹${amount || 'unknown'}
+
+Categories to choose from:
+- Food: restaurants, dhabas, cafes, food delivery, tiffin services, chai stalls
+- Transport: cab, auto, metro, bus, fuel, parking, toll
+- Groceries: kirana stores, provision stores, supermarkets, vegetable vendors, dairy
+- Bills: mobile recharge, electricity, water, internet, OTT subscriptions, insurance
+- Health: pharmacy, medical store, clinic, hospital, lab, doctor
+- Shopping: clothing, electronics, general retail, online shopping
+- Entertainment: movies, events, games, amusement, sports
+- Travel: hotels, flights, trains, travel agencies, holiday packages
+- Other: if genuinely unclear
+
+Indian context clues:
+- "Sons", "Brothers", "Enterprises", "Traders" → likely Groceries or Shopping
+- "Medical", "Pharma", "Medicals", "Dispensary" → Health
+- "Dhaba", "Hotel", "Bhojanalaya", "Kitchen" → Food
+- "Motors", "Automobiles", "Garage" → Transport
+- "Electricals", "Hardware" → Shopping
+- Names ending in "wala", "wali" → usually Food or Groceries
+
+Respond ONLY with this JSON structure:
+{
+  "category": "Groceries",
+  "confidence": 75,
+  "reasoning": "One sentence explaining why",
+  "alternativeCategory": "Shopping",
+  "alternativeConfidence": 15
+}`
+        }
+      ],
+      max_tokens: 150,
+      temperature: 0.1
+    })
+
+    const responseText = response.choices[0].message.content.trim()
+
+    let result
+    try {
+      const cleaned = responseText.replace(/```json|```/g, '').trim()
+      result = JSON.parse(cleaned)
+    } catch {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0])
+      } else {
+        return res.json({
+          success: true,
+          category: 'Other',
+          confidence: 0,
+          reasoning: 'Could not determine category'
+        })
+      }
+    }
+
+    res.json({ success: true, ...result })
+
+  } catch (error) {
+    console.error('Vendor categorize error:', error)
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
