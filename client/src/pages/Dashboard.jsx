@@ -200,6 +200,27 @@ function lookupVendor(merchant) {
   return map[merchant.toLowerCase().trim()] || null
 }
 
+// ── Vendor Memory (localStorage) ─────────────────────────────────────────────
+// 🧠 Stores user-confirmed vendor→category mappings
+// Key: "vendorMap" → Value: { "p h and sons": "Groceries", "saras": "Food" }
+const VENDOR_MAP_KEY = 'sw_vendor_map'
+
+function getVendorMap() {
+  try { return JSON.parse(localStorage.getItem(VENDOR_MAP_KEY) || '{}') }
+  catch { return {} }
+}
+
+function saveVendorMapping(merchant, category) {
+  const map = getVendorMap()
+  map[merchant.toLowerCase().trim()] = category
+  localStorage.setItem(VENDOR_MAP_KEY, JSON.stringify(map))
+}
+
+function lookupVendor(merchant) {
+  const map = getVendorMap()
+  return map[merchant.toLowerCase().trim()] || null
+}
+
 // ── Unknown Vendor Popup ──────────────────────────────────────────────────────
 function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
   const [current, setCurrent]       = useState(0)
@@ -279,7 +300,6 @@ function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
   }
   setSaving(false)
 }
-
   if (!vendor) return null
 
   const confidenceColor = !prediction ? '#475569' :
