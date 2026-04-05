@@ -146,7 +146,7 @@ export const getStats = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
-// PATCH /api/transactions/:id/category
+
 export const updateTransactionCategory = async (req, res) => {
   try {
     const { id }       = req.params
@@ -160,13 +160,13 @@ export const updateTransactionCategory = async (req, res) => {
       .from('transactions')
       .update({ category })
       .eq('id', id)
-      .eq('user_id', req.user.id)  // security check
+      .eq('user_id', req.user.id)
       .select()
       .single()
 
     if (error) return res.status(500).json({ success: false, message: error.message })
-
     res.json({ success: true, transaction: data })
+
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

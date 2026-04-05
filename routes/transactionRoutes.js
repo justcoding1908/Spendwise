@@ -11,5 +11,5 @@ router.get('/', getTransactions)
 router.post('/bulk', createBulkTransactions)
 router.post('/', createTransaction)
 router.delete('/:id', deleteTransaction)
-
+router.patch('/:id/category', updateTransactionCategory)
 export default router
