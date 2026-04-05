@@ -19,6 +19,14 @@ const MERCHANT_MAP = {
 }
 
 export function categorize(merchant) {
+  // 🧠 Check user's remembered mappings first
+  try {
+    const map = JSON.parse(localStorage.getItem('sw_vendor_map') || '{}')
+    const remembered = map[merchant.toLowerCase().trim()]
+    if (remembered) return remembered
+  } catch {}
+
+  // Fall back to keyword matching
   const lower = merchant.toLowerCase()
   for (const [key, cat] of Object.entries(MERCHANT_MAP)) {
     if (lower.includes(key)) return cat

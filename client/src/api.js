@@ -22,5 +22,6 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
-
+export const getStats = (month, year) =>
+  api.get(`/transactions/stats?month=${month}&year=${year}`)
 export default api
