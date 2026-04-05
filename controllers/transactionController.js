@@ -147,6 +147,7 @@ export const getStats = async (req, res) => {
   }
 }
 
+// PATCH /api/transactions/:id/category
 export const updateTransactionCategory = async (req, res) => {
   try {
     const { id }       = req.params
