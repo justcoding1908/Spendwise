@@ -7,7 +7,7 @@ import { CATEGORIES, CHART_COLORS, formatCurrency, formatDate, getGreeting } fro
 import { parseUPISMS } from '../utils/smsParser'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
 } from 'recharts'
 
 // ── Animated Counter ──────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function FloatingCoins() {
 }
 
 // ── 3D Hero Card ──────────────────────────────────────────────────────────────
-function HeroCard({ stats, user, onAddSMS, selectedMonth, selectedYear }) {
+function HeroCard({ stats, user, onAddSMS }) {
   const [rotation, setRotation] = useState({ x: 0, y: 0 })
   const cardRef = useRef(null)
 
@@ -79,9 +79,9 @@ function HeroCard({ stats, user, onAddSMS, selectedMonth, selectedYear }) {
     setRotation({ x, y })
   }
 
-  const selectedDate = new Date(selectedYear, selectedMonth - 1, 1)
-  const monthName = selectedDate.toLocaleString('en-IN', { month: 'long' })
-  const daysLeft = new Date(selectedYear, selectedMonth, 0).getDate() - new Date().getDate()
+  const now = new Date()
+  const monthName = now.toLocaleString('en-IN', { month: 'long' })
+  const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate()
 
   return (
     <motion.div ref={cardRef} onMouseMove={handleMouseMove} onMouseLeave={() => setRotation({ x: 0, y: 0 })}
@@ -177,329 +177,6 @@ function StatCards({ stats }) {
         </motion.div>
       ))}
     </div>
-  )
-}
-// ── Vendor Memory (localStorage) ─────────────────────────────────────────────
-// 🧠 Stores user-confirmed vendor→category mappings
-// Key: "vendorMap" → Value: { "p h and sons": "Groceries", "saras": "Food" }
-const VENDOR_MAP_KEY = 'sw_vendor_map'
-
-function getVendorMap() {
-  try { return JSON.parse(localStorage.getItem(VENDOR_MAP_KEY) || '{}') }
-  catch { return {} }
-}
-
-function saveVendorMapping(merchant, category) {
-  const map = getVendorMap()
-  map[merchant.toLowerCase().trim()] = category
-  localStorage.setItem(VENDOR_MAP_KEY, JSON.stringify(map))
-}
-
-function lookupVendor(merchant) {
-  const map = getVendorMap()
-  return map[merchant.toLowerCase().trim()] || null
-}
-
-// ── Unknown Vendor Popup ──────────────────────────────────────────────────────
-function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
-  const [current, setCurrent]       = useState(0)
-  const [prediction, setPrediction] = useState(null)
-  const [loading, setLoading]       = useState(false)
-  const [selected, setSelected]     = useState('')
-  const [saving, setSaving]         = useState(false)
-
-  const vendor = vendors[current]
-  const CATS = [
-    'Food','Transport','Groceries','Bills',
-    'Health','Shopping','Entertainment','Travel','Other'
-  ]
-
-  useEffect(() => {
-    if (!vendor) return
-    setLoading(true)
-    setPrediction(null)
-    setSelected('')
-
-    // 🧠 Step 1: Check localStorage first — instant, no API call needed
-    const remembered = lookupVendor(vendor.merchant)
-    if (remembered) {
-      setPrediction({
-        category:   remembered,
-        confidence: 100,
-        reasoning:  `You categorized "${vendor.merchant}" as ${remembered} before — remembered! ✨`,
-        fromMemory: true
-      })
-      setSelected(remembered)
-      setLoading(false)
-      return
-    }
-
-    // 🧠 Step 2: Not in memory — ask Groq LLM
-    api.post('/ai/categorize-vendor', {
-      merchant: vendor.merchant,
-      amount:   vendor.amount
-    })
-      .then(r => {
-        setPrediction(r.data)
-        if (r.data.confidence >= 50) setSelected(r.data.category)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [current])
-
-  const goNext = () => {
-    if (current + 1 >= vendors.length) {
-      onFetchData()
-      onComplete()
-    } else {
-      setCurrent(c => c + 1)
-    }
-  }
-
-  const handleConfirm = async () => {
-  if (!selected) { toast.error('Pick a category first'); return }
-  setSaving(true)
-  try {
-    // Save to localStorage memory first
-    saveVendorMapping(vendor.merchant, selected)
-
-    // Update each transaction ID
-    const results = await Promise.all(
-      vendor.ids.map(id =>
-        api.patch(`/transactions/${id}/category`, { category: selected })
-      )
-    )
-
-    console.log('✅ Patch results:', results)
-    toast.success(`${vendor.merchant} → ${selected} saved! ✅`)
-    goNext()
-  } catch (err) {
-    console.error('❌ Patch failed:', err.response?.data || err.message)
-    toast.error(`Failed: ${err.response?.data?.message || err.message}`)
-  }
-  setSaving(false)
-}
-
-  if (!vendor) return null
-
-  const confidenceColor = !prediction ? '#475569' :
-    prediction.fromMemory ? '#00e5a0' :
-    prediction.confidence >= 70 ? '#00e5a0' :
-    prediction.confidence >= 40 ? '#f59e0b' : '#ef4444'
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
-        zIndex: 9999, backdropFilter: 'blur(8px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-
-      <motion.div
-        initial={{ scale: 0.9, y: 24 }} animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 24 }}
-        style={{ background: '#111318', border: '1px solid rgba(124,58,237,0.3)',
-          borderRadius: 24, width: '100%', maxWidth: 500,
-          boxShadow: '0 40px 100px rgba(0,0,0,0.8)', overflow: 'hidden' }}>
-
-        {/* Header */}
-        <div style={{ padding: '20px 24px',
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.12), rgba(0,229,160,0.06))',
-          borderBottom: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>
-                🤖 AI Vendor Categorizer
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-                Powered by Llama 3.3 · Zero-shot classification
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22,
-                fontWeight: 800, color: '#7c3aed' }}>
-                {current + 1}/{vendors.length}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>vendors</div>
-            </div>
-          </div>
-          <div className="progress-track" style={{ marginTop: 12, height: 4 }}>
-            <motion.div
-              style={{ background: 'linear-gradient(90deg, #7c3aed, #00e5a0)', height: '100%', borderRadius: 3 }}
-              animate={{ width: `${(current / vendors.length) * 100}%` }}
-              transition={{ duration: 0.4 }} />
-          </div>
-        </div>
-
-        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          {/* Vendor Info */}
-          <div style={{ padding: '16px', background: 'var(--surface-2)',
-            border: '1px solid var(--border)', borderRadius: 14 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700,
-              letterSpacing: 1, marginBottom: 8 }}>UNKNOWN VENDOR</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20,
-              fontWeight: 800, marginBottom: 6, color: 'var(--text)' }}>
-              {vendor.merchant}
-            </div>
-            <div style={{ fontFamily: 'var(--font-mono)', color: '#ef4444', fontSize: 15, fontWeight: 700 }}>
-              -{formatCurrency(vendor.amount)}
-            </div>
-          </div>
-
-          {/* Loading */}
-          {loading && (
-            <div style={{ padding: '16px', background: 'rgba(124,58,237,0.06)',
-              border: '1px solid rgba(124,58,237,0.2)', borderRadius: 14,
-              display: 'flex', alignItems: 'center', gap: 12 }}>
-              <motion.div animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                style={{ width: 20, height: 20, flexShrink: 0,
-                  border: '2px solid rgba(124,58,237,0.2)',
-                  borderTop: '2px solid #7c3aed', borderRadius: '50%' }} />
-              <div>
-                <div style={{ fontSize: 13, color: '#a78bfa', fontWeight: 600 }}>
-                  Analyzing with Llama 3.3...
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
-                  Using world knowledge of Indian businesses
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Prediction */}
-          {prediction && !loading && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              style={{ padding: '16px', borderRadius: 14,
-                background: prediction.fromMemory
-                  ? 'rgba(0,229,160,0.06)' : 'rgba(124,58,237,0.06)',
-                border: `1px solid ${prediction.fromMemory
-                  ? 'rgba(0,229,160,0.25)' : 'rgba(124,58,237,0.25)'}` }}>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between',
-                alignItems: 'flex-start', marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1,
-                    marginBottom: 6, color: prediction.fromMemory ? '#00e5a0' : '#7c3aed' }}>
-                    {prediction.fromMemory ? '💾 FROM MEMORY' : '🧠 LLM PREDICTION'}
-                  </div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
-                    {CATEGORIES[prediction.category]?.emoji} {prediction.category}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 26,
-                    fontWeight: 800, color: confidenceColor, lineHeight: 1 }}>
-                    {prediction.confidence}%
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
-                    {prediction.fromMemory ? 'remembered' :
-                     prediction.confidence >= 70 ? 'high confidence' :
-                     prediction.confidence >= 40 ? 'medium' : 'low confidence'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Confidence bar */}
-              {!prediction.fromMemory && (
-                <div className="progress-track" style={{ marginBottom: 10, height: 6 }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${prediction.confidence}%` }}
-                    transition={{ duration: 0.8, ease: 'easeOut' }}
-                    style={{ height: '100%', borderRadius: 3,
-                      background: `linear-gradient(90deg, ${confidenceColor}88, ${confidenceColor})` }} />
-                </div>
-              )}
-
-              {/* Reasoning */}
-              {prediction.reasoning && (
-                <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.2)',
-                  borderRadius: 10 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700,
-                    letterSpacing: 0.8, marginBottom: 4 }}>
-                    {prediction.fromMemory ? '📌 WHY:' : '💡 WHY THIS CATEGORY:'}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>
-                    {prediction.reasoning}
-                  </div>
-                </div>
-              )}
-
-              {/* Alternative */}
-              {!prediction.fromMemory && prediction.alternativeCategory &&
-               prediction.alternativeConfidence > 5 && (
-                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
-                  Alternative: {CATEGORIES[prediction.alternativeCategory]?.emoji}{' '}
-                  {prediction.alternativeCategory} ({prediction.alternativeConfidence}%)
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Category Selector */}
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 700,
-              letterSpacing: 0.8, marginBottom: 10 }}>
-              {prediction?.confidence >= 50
-                ? 'AI suggestion selected — confirm or change:'
-                : 'Select the correct category:'}
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {CATS.map(cat => {
-                const isSelected  = selected === cat
-                const isPredicted = prediction?.category === cat && !isSelected
-                return (
-                  <motion.button key={cat}
-                    onClick={() => setSelected(cat)}
-                    whileTap={{ scale: 0.94 }}
-                    style={{ padding: '8px 16px', borderRadius: 20, cursor: 'pointer',
-                      fontSize: 13, transition: 'all 0.15s', fontFamily: 'var(--font-body)',
-                      border: `1px solid ${isSelected ? '#00e5a0' :
-                        isPredicted ? 'rgba(124,58,237,0.5)' : 'var(--border)'}`,
-                      background: isSelected  ? 'var(--mint-dim)' :
-                                  isPredicted ? 'rgba(124,58,237,0.08)' : 'transparent',
-                      color: isSelected  ? 'var(--mint)' :
-                             isPredicted ? '#a78bfa' : 'var(--text-3)',
-                      fontWeight: isSelected ? 700 : 400 }}>
-                    {CATEGORIES[cat]?.emoji} {cat}
-                    {isPredicted && (
-                      <span style={{ marginLeft: 6, fontSize: 9, background: '#7c3aed',
-                        color: '#fff', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>
-                        AI
-                      </span>
-                    )}
-                  </motion.button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <motion.button className="btn btn-ghost" onClick={goNext}
-              whileTap={{ scale: 0.96 }}
-              style={{ padding: '12px 20px', fontSize: 13 }}>
-              Skip →
-            </motion.button>
-            <motion.button className="btn btn-mint" onClick={handleConfirm}
-              disabled={!selected || saving}
-              style={{ flex: 1, padding: '12px', fontSize: 13 }}
-              whileTap={{ scale: 0.97 }}>
-              {saving
-                ? <span style={{ display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: 6 }}>
-                    <div className="spinner" /> Saving...
-                  </span>
-                : selected
-                  ? `✅ Confirm: ${CATEGORIES[selected]?.emoji} ${selected}`
-                  : 'Select a category'}
-            </motion.button>
-          </div>
-
-        </div>
-      </motion.div>
-    </motion.div>
   )
 }
 
@@ -690,38 +367,36 @@ function SMSSection({ onSave, onOpenReceiptScanner }) {
   }
 
   const handleSave = async () => {
-  if (!parsed.length) return
-  setSaving(true)
-  try {
-    const res = await api.post('/transactions/bulk', { transactions: parsed })
+    if (!parsed.length) return
+    setSaving(true)
+    try {
+      const res = await api.post('/transactions/bulk', { transactions: parsed })
 
-    // Find "Other" vendors to send to LLM categorizer
-    const savedTxns = res.data.transactions || []
-    const otherVendors = savedTxns
-      .filter(tx => tx.category === 'Other')
-      .reduce((acc, tx) => {
-        const existing = acc.find(v => v.merchant === tx.merchant)
-        if (existing) {
-          existing.ids.push(tx.id)
-        } else {
-          acc.push({
-            merchant: tx.merchant,
-            amount:   tx.amount,
-            date:     tx.date,
-            ids:      [tx.id]
-          })
-        }
-        return acc
-      }, [])
+      // Find "Other" vendors to send to LLM categorizer
+      const savedTxns = res.data.transactions || []
+      const otherVendors = savedTxns
+        .filter(tx => tx.category === 'Other')
+        .reduce((acc, tx) => {
+          const existing = acc.find(v => v.merchant === tx.merchant)
+          if (existing) {
+            existing.ids.push(tx.id)
+          } else {
+            acc.push({
+              merchant: tx.merchant,
+              amount:   tx.amount,
+              date:     tx.date,
+              ids:      [tx.id]
+            })
+          }
+          return acc
+        }, [])
 
-    toast.success(`${parsed.length} transactions saved! 🔥`)
-    onSave(otherVendors)
-    setSmsText(''); setParsed([]); setUnrecognized([])
-  } catch {
-    toast.error('Failed to save')
+      toast.success(`${parsed.length} transactions saved! 🔥`)
+      onSave(otherVendors)
+      setSmsText(''); setParsed([]); setUnrecognized([])
+    } catch { toast.error('Failed to save') }
+    setSaving(false)
   }
-  setSaving(false)
-}
 
   const handleManual = async () => {
     if (!manual.merchant || !manual.amount) { toast.error('Merchant and amount required'); return }
@@ -939,213 +614,7 @@ function TxnsSection({ transactions, onDelete }) {
     </motion.div>
   )
 }
-// ── Spend Forecast Section ────────────────────────────────────────────────────
-function weightedForecast(transactions, today, daysInMonth) {
-  // Step 1: Build daily spending map
-  const dailyMap = {}
-  transactions.forEach(tx => {
-    const day = new Date(tx.date).getDate()
-    dailyMap[day] = (dailyMap[day] || 0) + Number(tx.amount)
-  })
 
-  // Step 2: Weighted moving average — recent days get higher weight
-  let weightedSum = 0
-  let totalWeight = 0
-  for (let day = 1; day <= today; day++) {
-    if (dailyMap[day]) {
-      const weight = day // recent days have higher weight
-      weightedSum  += dailyMap[day] * weight
-      totalWeight  += weight
-    }
-  }
-
-  const weightedDailyAvg = totalWeight > 0 ? weightedSum / totalWeight : 0
-
-  // Step 3: Current cumulative spend
-  const currentSpend = Object.values(dailyMap).reduce((s, v) => s + v, 0)
-
-  // Step 4: Project remaining days
-  const daysLeft = daysInMonth - today
-  const projected = Math.round(currentSpend + weightedDailyAvg * daysLeft)
-
-  // Step 5: Build chart data — cumulative actual + forecast
-  let cumulative = 0
-  const chartData = []
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    cumulative += dailyMap[day] || 0
-    if (day <= today) {
-      chartData.push({ day: `${day}`, actual: cumulative, forecast: null })
-    } else {
-      const forecastVal = Math.round(currentSpend + weightedDailyAvg * (day - today))
-      // Connect forecast from today's actual value
-      if (day === today + 1) {
-        chartData[chartData.length - 1].forecast = cumulative // overlap point
-      }
-      chartData.push({ day: `${day}`, actual: null, forecast: forecastVal })
-    }
-  }
-
-  return { projected, currentSpend, weightedDailyAvg, chartData }
-}
-
-function ForecastSection({ transactions, stats }) {
-  const now       = new Date()
-  const today     = now.getDate()
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-
-  // ── Step 1: Filter this month's transactions ──────────────────────────────
-  const thisMonth = transactions.filter(tx => {
-    const d = new Date(tx.date)
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-  })
-
-  if (thisMonth.length < 3) return (
-    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-      className="section" style={{ marginBottom: 24 }}>
-      <div className="section-title" style={{ marginBottom: 4 }}>🔮 Spend Forecast</div>
-      <div className="section-sub" style={{ marginBottom: 20 }}>AI predicts your month-end spending</div>
-      <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-3)', fontSize: 14 }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
-        Add at least 3 transactions this month to unlock your forecast
-      </div>
-    </motion.div>
-  )
-
-  // ── Step 2: Call weighted forecast algorithm ──────────────────────────────
-  const { projected: forecastEnd, currentSpend, weightedDailyAvg, chartData } = 
-    weightedForecast(thisMonth, today, daysInMonth)
-
-  // ── Step 3: Determine verdict ─────────────────────────────────────────────
-  const totalBudget = Object.values(stats.byCategory || {}).length > 0
-    ? Object.keys(stats.byCategory).reduce((sum, cat) => sum + (stats.byCategory[cat] || 0), 0)
-    : null
-  const overBudgetBy = forecastEnd - currentSpend * (daysInMonth / today)
-
-  let verdict, verdictColor, verdictBg, verdictBorder
-  const ratio = forecastEnd / (currentSpend * (daysInMonth / Math.max(today, 1)))
-
-  if (ratio <= 1.05) {
-    verdict = '🟢 On track — you\'re spending consistently'
-    verdictColor = '#00e5a0'
-    verdictBg = 'rgba(0,229,160,0.06)'
-    verdictBorder = 'rgba(0,229,160,0.2)'
-  } else if (ratio <= 1.25) {
-    verdict = '🟡 Careful — spending is picking up pace'
-    verdictColor = '#f59e0b'
-    verdictBg = 'rgba(245,158,11,0.06)'
-    verdictBorder = 'rgba(245,158,11,0.2)'
-  } else {
-    verdict = '🔴 High spend detected — consider cutting back'
-    verdictColor = '#ef4444'
-    verdictBg = 'rgba(239,68,68,0.06)'
-    verdictBorder = 'rgba(239,68,68,0.2)'
-  }
-
-  // Daily average
-  const daysLeft = daysInMonth - today
-  const projectedRemaining = Math.round(weightedDailyAvg * daysLeft)
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }} transition={{ duration: 0.5 }}
-      className="section" style={{ marginBottom: 24 }}>
-
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <div className="section-title">🔮 Spend Forecast</div>
-          <div className="section-sub">Weighted moving average · recent spending weighted {Math.min(today, 3)}x higher</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 3, background: '#00e5a0', borderRadius: 2 }} />
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Actual</span>
-          <div style={{ width: 28, height: 3, background: '#7c3aed', borderRadius: 2, backgroundImage: 'repeating-linear-gradient(90deg, #7c3aed 0, #7c3aed 6px, transparent 6px, transparent 10px)' }} />
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Forecast</span>
-        </div>
-      </div>
-
-      {/* Stat pills row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        {[
-          { label: 'Spent so far', value: formatCurrency(currentSpend), color: '#00e5a0', sub: `Day ${today} of ${daysInMonth}` },
-          { label: 'Projected total', value: formatCurrency(forecastEnd), color: '#7c3aed', sub: 'By end of month' },
-          { label: 'Daily average', value: formatCurrency(Math.round(weightedDailyAvg)), color: '#f59e0b', sub: `~${formatCurrency(projectedRemaining)} left` },
-        ].map((s, i) => (
-          <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }} transition={{ delay: i * 0.1 }}
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>{s.label}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: s.color, letterSpacing: -0.5 }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{s.sub}</div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Chart */}
-      <div style={{ height: 260, marginBottom: 16 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-            <XAxis
-              dataKey="day"
-              tick={{ fill: '#475569', fontSize: 10, fontFamily: 'JetBrains Mono' }}
-              axisLine={false} tickLine={false}
-              interval={Math.floor(daysInMonth / 6)}
-            />
-            <YAxis
-              tick={{ fill: '#475569', fontSize: 10 }}
-              axisLine={false} tickLine={false}
-              tickFormatter={v => `₹${v >= 1000 ? (v/1000).toFixed(1)+'k' : v}`}
-            />
-            <Tooltip
-              contentStyle={{ background: '#1a1d24', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, fontFamily: 'JetBrains Mono' }}
-              labelStyle={{ color: '#64748b', marginBottom: 4 }}
-              formatter={(value, name) => [
-                `₹${Number(value).toLocaleString('en-IN')}`,
-                name === 'actual' ? 'Actual' : 'Forecast'
-              ]}
-              labelFormatter={label => `Day ${label}`}
-            />
-            {/* Actual spending — solid mint line */}
-            <Line
-              type="monotone"
-              dataKey="actual"
-              stroke="#00e5a0"
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{ r: 4, fill: '#00e5a0' }}
-              connectNulls={false}
-            />
-            {/* Forecast — dashed purple line */}
-            <Line
-              type="monotone"
-              dataKey="forecast"
-              stroke="#7c3aed"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              dot={false}
-              activeDot={{ r: 4, fill: '#7c3aed' }}
-              connectNulls={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Verdict banner */}
-      <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
-        style={{ padding: '14px 18px', background: verdictBg, border: `1px solid ${verdictBorder}`, borderRadius: 12,
-          fontSize: 13, fontWeight: 600, color: verdictColor, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>{verdict}</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14 }}>
-          {forecastEnd > currentSpend
-            ? `+${formatCurrency(forecastEnd - currentSpend)} more projected`
-            : 'Looking good!'}
-        </span>
-      </motion.div>
-    </motion.div>
-  )
-}
 // ── Analytics Section ─────────────────────────────────────────────────────────
 function AnalyticsSection({ transactions, stats }) {
   const catData = Object.entries(stats.byCategory || {}).map(([name, value]) => ({ name, value }))
@@ -1216,50 +685,14 @@ function BudgetSection({ stats }) {
   const [editing, setEditing] = useState(false)
   const [temp, setTemp] = useState({})
 
- useEffect(() => {
-  const fetchBudgets = async () => {
-    try {
-      // Step 1: Try this month first
-      const res = await api.get(`/budgets?month=${now.getMonth()}&year=${now.getFullYear()}`)
-
-      if (res.data.budgets.length > 0) {
-        // This month has budgets — use them
+  useEffect(() => {
+    api.get(`/budgets?month=${now.getMonth()}&year=${now.getFullYear()}`)
+      .then(r => {
         const map = {}
-        res.data.budgets.forEach(b => { map[b.category] = b.monthly_limit })
+        r.data.budgets.forEach(b => { map[b.category] = b.monthly_limit })
         setBudgets(map)
-        return
-      }
-
-      // Step 2: No budgets this month — check last month
-      const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth()
-      const lastYear  = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-      const prev = await api.get(`/budgets?month=${lastMonth}&year=${lastYear}`)
-
-      if (prev.data.budgets.length === 0) return // nothing to copy either
-
-      // Step 3: Copy last month's limits into this month silently
-      await Promise.all(prev.data.budgets.map(b =>
-        api.post('/budgets', {
-          category:     b.category,
-          monthlyLimit: b.monthly_limit,
-          month:        now.getMonth(),
-          year:         now.getFullYear()
-        })
-      ))
-
-      // Step 4: Re-fetch the newly copied budgets
-      const fresh = await api.get(`/budgets?month=${now.getMonth()}&year=${now.getFullYear()}`)
-      const map = {}
-      fresh.data.budgets.forEach(b => { map[b.category] = b.monthly_limit })
-      setBudgets(map)
-
-    } catch (e) {
-      console.error('Budget fetch error:', e)
-    }
-  }
-
-  fetchBudgets()
-}, [])
+      }).catch(() => {})
+  }, [])
 
   const save = async () => {
     try {
@@ -1470,73 +903,82 @@ function AIBubble({ stats, transactions }) {
       )}
     </>
   )
-}// ── Month Switcher ────────────────────────────────────────────────────────────
-function MonthSwitcher({ selectedMonth, selectedYear, onChange }) {
-  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun',
-                       'Jul','Aug','Sep','Oct','Nov','Dec']
-  
-  // 🧠 LEARNING: We build last 6 months dynamically
-  // setMonth() on a Date object handles year rollover automatically
-  // e.g. if current month is Jan, going back gives Dec of previous year
-  const options = []
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date()
-    d.setMonth(d.getMonth() - i)
-    options.push({
-      month: d.getMonth() + 1,  // +1 because getMonth() is 0-indexed
-      year: d.getFullYear(),
-      label: MONTH_NAMES[d.getMonth()]
-    })
+}
+
+// ── Unknown Vendor Popup ─────────────────────────────────────────────────────
+function UnknownVendorPopup({ vendors, onFetchData, onComplete }) {
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [selected, setSelected] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const vendor = vendors[currentIdx]
+  const goNext = () => {
+    if (currentIdx < vendors.length - 1) {
+      setCurrentIdx(currentIdx + 1)
+      setSelected('')
+    } else {
+      onComplete()
+    }
   }
 
-  const currentM = new Date().getMonth() + 1
-  const currentY = new Date().getFullYear()
+  const handleConfirm = async () => {
+    if (!selected) { toast.error('Pick a category first'); return }
+    setSaving(true)
+    try {
+      await Promise.all(
+        vendor.ids.map(id =>
+          api.patch(`/transactions/${id}/category`, { category: selected })
+        )
+      )
+      toast.success(`${vendor.merchant} → ${selected} ✅`)
+      goNext()
+    } catch { toast.error('Failed to update') }
+    setSaving(false)
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      style={{ display: 'flex', gap: 8, marginBottom: 20, overflowX: 'auto', scrollbarWidth: 'none' }}
-    >
-      {options.map(({ month, year, label }) => {
-        const isActive = month === selectedMonth && year === selectedYear
-        const isCurrent = month === currentM && year === currentY
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onComplete}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 5000, backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} >
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24,
+          padding: 32, maxWidth: 420, width: '90%', zIndex: 5001, boxShadow: '0 40px 80px rgba(0,0,0,0.6)'
+        }} >
 
-        return (
-          <motion.button
-            key={`${month}-${year}`}
-            onClick={() => onChange(month, year)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            style={{
-              padding: '7px 18px',
-              borderRadius: 20,
-              border: `1px solid ${isActive ? '#00e5a0' : 'rgba(255,255,255,0.08)'}`,
-              background: isActive ? 'rgba(0,229,160,0.12)' : 'transparent',
-              color: isActive ? '#00e5a0' : '#475569',
-              fontSize: 13,
-              fontWeight: isActive ? 700 : 400,
-              fontFamily: 'var(--font-body)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              flexShrink: 0
-            }}
-          >
-            {label} {year !== currentY && <span style={{ fontSize: 10, opacity: 0.7 }}>{year}</span>}
-            {isCurrent && (
-              // 🧠 LEARNING: This is a small "NOW" badge — only shows on current month
-              <span style={{
-                fontSize: 9, background: '#00e5a0', color: '#000',
-                borderRadius: 4, padding: '1px 5px', fontWeight: 800, letterSpacing: 0.5
-              }}>NOW</span>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', fontWeight: 600 }}>
+            Unknown Vendor · {currentIdx + 1}/{vendors.length}
+          </div>
+          <div style={{ fontFamily: 'Plus Jakarta Sans', fontSize: 24, fontWeight: 800, marginBottom: 4 }}>
+            {vendor.merchant}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            {formatCurrency(vendor.amount)} · {formatDate(vendor.date)}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label className="input-label">Pick a category</label>
+          <select className="input" value={selected} onChange={e => setSelected(e.target.value)}
+            style={{ fontSize: 13, padding: '10px 12px' }}>
+            <option value="">Select category...</option>
+            {Object.keys(CATEGORIES).filter(c => c !== 'Unusual' && c !== 'Other').map(c =>
+              <option key={c} value={c}>{CATEGORIES[c].emoji} {c}</option>
             )}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <motion.button className="btn btn-ghost" onClick={goNext} style={{ flex: 1 }} whileTap={{ scale: 0.98 }}>
+            Skip
           </motion.button>
-        )
-      })}
+          <motion.button className="btn btn-mint" onClick={handleConfirm} disabled={!selected || saving} style={{ flex: 1, padding: '12px' }} whileTap={{ scale: 0.98 }}>
+            {saving ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><div className="spinner" />Saving...</span> : 'Confirm'}
+          </motion.button>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }
@@ -1550,7 +992,7 @@ function Navbar({ user, onLogout }) {
         SpendWise
       </div>
       <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-        {[['hero', '⚡ Overview'], ['sms-section', '📱 Add SMS'], ['txns-section', '💳 Transactions'], ['analytics-section', '📊 Analytics'],['forecast-section', '🔮 Forecast'], ['budget-section', '🎯 Budget']].map(([id, label]) => (
+        {[['hero', '⚡ Overview'], ['sms-section', '📱 Add SMS'], ['txns-section', '💳 Transactions'], ['analytics-section', '📊 Analytics'], ['budget-section', '🎯 Budget']].map(([id, label]) => (
           <button key={id} className="nav-item" onClick={() => scrollTo(id)}>{label}</button>
         ))}
       </div>
@@ -1564,29 +1006,25 @@ function Navbar({ user, onLogout }) {
 
 // ── MAIN DASHBOARD ────────────────────────────────────────────────────────────
 export default function Dashboard() {
- const { user, logout } = useAuth()
-const [transactions, setTransactions] = useState([])
-const [stats, setStats] = useState({ totalSpent: 0, count: 0, byCategory: {}, topCategory: null, biggestTransaction: 0 })
-const [loading, setLoading] = useState(true)
-const [showReceiptScanner, setShowReceiptScanner] = useState(false)
-const [unknownVendors, setUnknownVendors]   = useState([])
-const [showVendorPopup, setShowVendorPopup] = useState(false)
-
-const now = new Date()
-const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1)
-const [selectedYear, setSelectedYear] = useState(now.getFullYear())
+  const { user, logout } = useAuth()
+  const [transactions, setTransactions] = useState([])
+  const [stats, setStats] = useState({ totalSpent: 0, count: 0, byCategory: {}, topCategory: null, biggestTransaction: 0 })
+  const [loading, setLoading] = useState(true)
+  const [showReceiptScanner, setShowReceiptScanner] = useState(false)  // ← state lives here
+  const [showVendorPopup, setShowVendorPopup] = useState(false)
+  const [unknownVendors, setUnknownVendors] = useState([])
 
   const fetchData = useCallback(async () => {
-  try {
-    const [txRes, statsRes] = await Promise.all([
-      api.get(`/transactions?month=${selectedMonth}&year=${selectedYear}`),
-      api.get(`/transactions/stats?month=${selectedMonth}&year=${selectedYear}`)
-    ])
-    setTransactions(txRes.data.transactions || [])
-    setStats(statsRes.data.stats || {})
-  } catch { toast.error('Failed to load data') }
-  setLoading(false)
-}, [selectedMonth, selectedYear])
+    try {
+      const [txRes, statsRes] = await Promise.all([
+        api.get('/transactions'),
+        api.get('/transactions/stats')
+      ])
+      setTransactions(txRes.data.transactions || [])
+      setStats(statsRes.data.stats || {})
+    } catch { toast.error('Failed to load data') }
+    setLoading(false)
+  }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1617,34 +1055,24 @@ const [selectedYear, setSelectedYear] = useState(now.getFullYear())
       <Navbar user={user} onLogout={handleLogout} />
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 20px 100px', position: 'relative', zIndex: 1 }}>
-        <MonthSwitcher
-    selectedMonth={selectedMonth}
-    selectedYear={selectedYear}
-    onChange={(m, y) => {
-      // 🧠 LEARNING: Setting state triggers a re-render
-      // fetchData's useCallback dependency array picks up the new values
-      // So data re-fetches for the new month automatically — no manual call needed!
-      setSelectedMonth(m)
-      setSelectedYear(y)
-    }}
-  />
         <div id="hero">
-          <HeroCard stats={stats} user={user} onAddSMS={scrollToSMS} selectedMonth={selectedMonth} selectedYear={selectedYear} />
+          <HeroCard stats={stats} user={user} onAddSMS={scrollToSMS} />
           <StatCards stats={stats} />
         </div>
 
         <div id="sms-section">
-  <SMSSection
-    onSave={(otherVendors) => {
-      fetchData()
-      if (otherVendors?.length > 0) {
-        setUnknownVendors(otherVendors)
-        setShowVendorPopup(true)
-      }
-    }}
-    onOpenReceiptScanner={() => setShowReceiptScanner(true)}
-  />
-</div>
+          {/* onOpenReceiptScanner prop passes the setter down */}
+          <SMSSection
+            onSave={(otherVendors) => {
+              fetchData()
+              if (otherVendors?.length > 0) {
+                setUnknownVendors(otherVendors)
+                setShowVendorPopup(true)
+              }
+            }}
+            onOpenReceiptScanner={() => setShowReceiptScanner(true)}
+          />
+        </div>
 
         <div id="txns-section">
           <TxnsSection transactions={transactions} onDelete={handleDelete} />
@@ -1652,10 +1080,6 @@ const [selectedYear, setSelectedYear] = useState(now.getFullYear())
 
         <div id="analytics-section">
           <AnalyticsSection transactions={transactions} stats={stats} />
-        </div>
-
-        <div id="forecast-section">
-          <ForecastSection transactions={transactions} stats={stats} />
         </div>
 
         <div id="budget-section">
@@ -1673,7 +1097,7 @@ const [selectedYear, setSelectedYear] = useState(now.getFullYear())
         )}
       </AnimatePresence>
 
-     <AnimatePresence>
+      <AnimatePresence>
         {showVendorPopup && unknownVendors.length > 0 && (
           <UnknownVendorPopup
             vendors={unknownVendors}
