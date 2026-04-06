@@ -292,8 +292,8 @@ function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
         initial={{ scale: 0.9, y: 24 }} animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 24 }}
         style={{ background: '#111318', border: '1px solid rgba(124,58,237,0.3)',
-          borderRadius: 24, width: '100%', maxWidth: 500,
-          boxShadow: '0 40px 100px rgba(0,0,0,0.8)', overflow: 'hidden' }}>
+         borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '85vh',
+        boxShadow: '0 40px 100px rgba(0,0,0,0.8)', overflow: 'hidden', overflowY: 'auto' }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px',
