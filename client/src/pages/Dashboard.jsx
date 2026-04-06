@@ -266,10 +266,12 @@ function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
 
     console.log('✅ Patch results:', results)
     toast.success(`${vendor.merchant} → ${selected} saved! ✅`)
+    onFetchData()
     goNext()
   } catch (err) {
     console.error('❌ Patch failed:', err.response?.data || err.message)
     toast.error(`Failed: ${err.response?.data?.message || err.message}`)
+
   }
   setSaving(false)
 }
