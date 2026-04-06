@@ -10,5 +10,6 @@ router.post('/insight', getFinancialInsight)
 router.post('/parse-sms', parseSMSWithAI)
 router.post('/detect-anomalies', detectAnomalies)
 router.post('/scan-receipt', scanReceipt) 
+router.post('/categorize-vendor', categorizeVendor)
 
 export default router
