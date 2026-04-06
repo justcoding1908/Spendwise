@@ -1,5 +1,5 @@
 import express from 'express'
-import { getTransactions, createTransaction, createBulkTransactions, deleteTransaction, getStats } from '../controllers/transactionController.js'
+import { getTransactions, createTransaction, createBulkTransactions, deleteTransaction, getStats, updateTransactionCategory } from '../controllers/transactionController.js'
 import protect from '../middleware/auth.js'
 
 const router = express.Router()
@@ -11,5 +11,5 @@ router.get('/', getTransactions)
 router.post('/bulk', createBulkTransactions)
 router.post('/', createTransaction)
 router.delete('/:id', deleteTransaction)
-
+router.patch('/:id/category', updateTransactionCategory)
 export default router
