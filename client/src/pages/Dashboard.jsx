@@ -266,7 +266,7 @@ function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
 
     console.log('✅ Patch results:', results)
     toast.success(`${vendor.merchant} → ${selected} saved! ✅`)
-    onFetchData()
+    await onFetchData()
     const goNext = () => {
   if (current + 1 >= vendors.length) {
     onComplete()  // ← removed onFetchData() from here
