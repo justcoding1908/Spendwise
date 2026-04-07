@@ -145,3 +145,88 @@ select.input { cursor: pointer; }
   .stat-value { font-size: 24px; }
   .auth-card { padding: 28px 20px; }
 }
+/* ── Mobile Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Navbar — hide text labels, show icons only */
+  .navbar {
+    padding: 0 12px;
+    gap: 2px;
+    height: 56px;
+  }
+
+  /* Hide nav labels on mobile */
+  .nav-item {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  /* Main content padding */
+  main {
+    padding: 70px 12px 80px !important;
+  }
+
+  /* Hero card */
+  .hero-card {
+    padding: 24px 20px !important;
+    border-radius: 20px !important;
+  }
+
+  /* Stat cards — 2x2 grid on mobile */
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* SMS section — stack vertically */
+  .sms-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Analytics — stack vertically */
+  .analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Forecast stat pills — stack */
+  .forecast-pills {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Budget cards */
+  .budget-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Month switcher — scrollable */
+  .month-switcher {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modals — full screen on mobile */
+  .modal-inner {
+    max-width: 100% !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small — single column budget */
+  .budget-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Hide some nav items */
+  .nav-item:nth-child(n+5) {
+    display: none;
+  }
+
+  /* Smaller stat value font */
+  .stat-value {
+    font-size: 22px !important;
+  }
+}

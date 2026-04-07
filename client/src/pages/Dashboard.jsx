@@ -150,7 +150,7 @@ function StatCards({ stats }) {
     { label: 'CATEGORIES', value: Object.keys(stats.byCategory || {}).length, color: '#a78bfa', icon: '🗂️', bg: 'rgba(124,58,237,0.06)' },
   ]
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+    <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
       {cards.map((c, i) => (
         <motion.div key={i} className="stat-card"
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -680,7 +680,7 @@ function SMSSection({ onSave, onOpenReceiptScanner }) {
       </div>
       <AnimatePresence mode="wait">
         {tab === 'sms' && (
-          <motion.div key="sms" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <motion.div key="sms" className="sms-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             <div>
               <label className="input-label">Paste SBI UPI messages</label>
               <textarea className="input" style={{ height: 260 }}
@@ -898,7 +898,7 @@ function ForecastSection({ transactions, stats }) {
           <div style={{ width: 28, height: 3, background: '#7c3aed', borderRadius: 2 }} /><span style={{ fontSize: 11, color: 'var(--text-3)' }}>Forecast</span>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="forecast-pills" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Spent so far', value: formatCurrency(currentSpend), color: '#00e5a0', sub: `Day ${today} of ${daysInMonth}` },
           { label: 'Projected total', value: formatCurrency(forecastEnd), color: '#7c3aed', sub: 'By end of month' },
@@ -946,7 +946,7 @@ const weeks = [0, 0, 0, 0]
   const weeklyData = ['3w ago', '2w ago', 'Last wk', 'This wk'].map((name, i) => ({ name, amount: weeks[i] }))
   if (!transactions.length) return null
   return (
-    <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+    <motion.div className="analytics-grid" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
       <div className="section">
         <div className="section-title" style={{ marginBottom: 4 }}>📊 Category Split</div>
         <div className="section-sub" style={{ marginBottom: 16 }}>Where your money actually goes</div>
@@ -1024,7 +1024,7 @@ function BudgetSection({ stats }) {
         {!editing ? <button className="btn btn-outline btn-sm" onClick={() => { setTemp({ ...budgets }); setEditing(true) }}>✏️ Set Limits</button>
           : <button className="btn btn-mint btn-sm" onClick={save}>💾 Save</button>}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+      <div className="budget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {cats.map((cat, i) => {
           const spent = stats.byCategory?.[cat] || 0, limit = budgets[cat] || 0
           const pct = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0
@@ -1099,7 +1099,7 @@ function AIBubble({ stats, transactions }) {
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }} transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            style={{ position: 'fixed', bottom: 90, right: 24, width: 370, zIndex: 9998, background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+            style={{ position: 'fixed', bottom: 90, right: 24, width: 'min(370px, calc(100vw - 48px))', zIndex: 9998, background: '#111318', border: '1px solid rgba(0,229,160,0.2)', borderRadius: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
             <div style={{ background: 'linear-gradient(135deg, rgba(0,229,160,0.12), rgba(124,58,237,0.08))', padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1180,9 +1180,19 @@ function Navbar({ user, onLogout }) {
   return (
     <motion.nav className="navbar" initial={{ y: -60 }} animate={{ y: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
       <div style={{ fontFamily: 'Plus Jakarta Sans', fontSize: 18, fontWeight: 800, color: '#00e5a0', letterSpacing: -0.5, marginRight: 16, flexShrink: 0 }}>SpendWise</div>
-      <div style={{ display: 'flex', gap: 2, flex: 1 }}>
-        {[['hero', '⚡ Overview'], ['sms-section', '📱 Add SMS'], ['txns-section', '💳 Transactions'], ['analytics-section', '📊 Analytics'], ['forecast-section', '🔮 Forecast'], ['budget-section', '🎯 Budget']].map(([id, label]) => (
-          <button key={id} className="nav-item" onClick={() => scrollTo(id)}>{label}</button>
+      <div style={{ display: 'flex', gap: 2, flex: 1, overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {[
+          ['hero', '⚡'],
+          ['sms-section', '📱'],
+          ['txns-section', '💳'],
+          ['analytics-section', '📊'],
+          ['forecast-section', '🔮'],
+          ['budget-section', '🎯']
+        ].map(([id, label]) => (
+          <button key={id} className="nav-item" onClick={() => scrollTo(id)}
+            style={{ flexShrink: 0 }}>
+            {label}
+          </button>
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
