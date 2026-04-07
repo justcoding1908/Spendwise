@@ -934,11 +934,15 @@ function ForecastSection({ transactions, stats }) {
 }
 
 // ── Analytics Section ─────────────────────────────────────────────────────────
-function AnalyticsSection({ transactions, stats }) {
+function AnalyticsSection({ transactions, allTransactions, stats }) {
   const catData = Object.entries(stats.byCategory || {}).map(([name, value]) => ({ name, value }))
   const now = new Date()
-  const weeks = [0, 0, 0, 0]
-  transactions.forEach(tx => { const d = new Date(tx.date); const diff = Math.floor((now - d) / (7 * 24 * 60 * 60 * 1000)); if (diff >= 0 && diff < 4) weeks[3 - diff] += tx.amount })
+const weeks = [0, 0, 0, 0]
+;(allTransactions || transactions).forEach(tx => {
+    const d = new Date(tx.date)
+    const diff = Math.floor((now - d) / (7 * 24 * 60 * 60 * 1000))
+    if (diff >= 0 && diff < 4) weeks[3 - diff] += tx.amount
+  })
   const weeklyData = ['3w ago', '2w ago', 'Last wk', 'This wk'].map((name, i) => ({ name, amount: weeks[i] }))
   if (!transactions.length) return null
   return (
@@ -1193,6 +1197,7 @@ function Navbar({ user, onLogout }) {
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const [transactions, setTransactions] = useState([])
+  const [allTransactions, setAllTransactions] = useState([])
   const [stats, setStats] = useState({ totalSpent: 0, count: 0, byCategory: {}, topCategory: null, biggestTransaction: 0 })
   const [loading, setLoading] = useState(true)
   const [showReceiptScanner, setShowReceiptScanner] = useState(false)
@@ -1203,16 +1208,18 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear())
 
   const fetchData = useCallback(async () => {
-    try {
-      const [txRes, statsRes] = await Promise.all([
-        api.get(`/transactions?month=${selectedMonth}&year=${selectedYear}`),
-        api.get(`/transactions/stats?month=${selectedMonth}&year=${selectedYear}`)
-      ])
-      setTransactions(txRes.data.transactions || [])
-      setStats(statsRes.data.stats || {})
-    } catch { toast.error('Failed to load data') }
-    setLoading(false)
-  }, [selectedMonth, selectedYear])
+  try {
+    const [txRes, statsRes, allTxRes] = await Promise.all([
+      api.get(`/transactions?month=${selectedMonth}&year=${selectedYear}`),
+      api.get(`/transactions/stats?month=${selectedMonth}&year=${selectedYear}`),
+      api.get(`/transactions`)  // ← no month filter for weekly trend
+    ])
+    setTransactions(txRes.data.transactions || [])
+    setStats(statsRes.data.stats || {})
+    setAllTransactions(allTxRes.data.transactions || [])
+  } catch { toast.error('Failed to load data') }
+  setLoading(false)
+}, [selectedMonth, selectedYear])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1252,7 +1259,7 @@ export default function Dashboard() {
           />
         </div>
         <div id="txns-section"><TxnsSection transactions={transactions} onDelete={handleDelete} /></div>
-        <div id="analytics-section"><AnalyticsSection transactions={transactions} stats={stats} /></div>
+        <div id="analytics-section"><AnalyticsSection transactions={transactions} allTransactions={allTransactions} stats={stats} /></div>
         <div id="forecast-section"><ForecastSection transactions={transactions} stats={stats} /></div>
         <div id="budget-section"><BudgetSection stats={stats} /></div>
       </main>
