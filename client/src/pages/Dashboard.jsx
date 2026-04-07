@@ -254,30 +254,16 @@ function UnknownVendorPopup({ vendors, onComplete, onFetchData }) {
   if (!selected) { toast.error('Pick a category first'); return }
   setSaving(true)
   try {
-    // Save to localStorage memory first
     saveVendorMapping(vendor.merchant, selected)
-
-    // Update each transaction ID
-    const results = await Promise.all(
-      vendor.ids.map(id =>
-        api.patch(`/transactions/${id}/category`, { category: selected })
-      )
-    )
-
-    console.log('✅ Patch results:', results)
+    await Promise.all(vendor.ids.map(id =>
+      api.patch(`/transactions/${id}/category`, { category: selected })
+    ))
     toast.success(`${vendor.merchant} → ${selected} saved! ✅`)
-    await onFetchData()
-    const goNext = () => {
-  if (current + 1 >= vendors.length) {
-    onComplete()  // ← removed onFetchData() from here
-  } else {
-    setCurrent(c => c + 1)
-  }
-}
+    await onFetchData()   // ← await this
+    goNext()
   } catch (err) {
-    console.error('❌ Patch failed:', err.response?.data || err.message)
+    console.error('Patch failed:', err.response?.data || err.message)
     toast.error(`Failed: ${err.response?.data?.message || err.message}`)
-
   }
   setSaving(false)
 }
