@@ -500,6 +500,7 @@ function ReceiptScanner({ onAdd, onClose }) {
   const [category, setCategory] = useState('')
   const [error, setError] = useState('')
   const fileRef = useRef(null)
+  const galleryRef = useRef(null)
 
   const handleFile = (file) => {
     if (!file) return
@@ -557,18 +558,33 @@ function ReceiptScanner({ onAdd, onClose }) {
         </div>
         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
           {!result && (
-            <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onClick={() => fileRef.current?.click()}
-              style={{ border: `2px dashed ${preview ? 'rgba(0,229,160,0.4)' : 'var(--border)'}`, borderRadius: 16, padding: preview ? 0 : '36px 24px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', overflow: 'hidden', background: preview ? 'transparent' : 'var(--surface-2)' }}>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
-              {preview ? <img src={preview} alt="Receipt" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 14, display: 'block' }} /> : (
-                <>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
-                  <div style={{ fontSize: 14, color: 'var(--text-2)', fontWeight: 600, marginBottom: 6 }}>Click to upload or drag & drop</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)' }}>JPG, PNG up to 5MB</div>
-                </>
-              )}
-            </div>
-          )}
+  <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}
+    style={{ border: `2px dashed ${preview ? 'rgba(0,229,160,0.4)' : 'var(--border)'}`, borderRadius: 16, padding: preview ? 0 : '24px', textAlign: 'center', transition: 'all 0.2s', overflow: 'hidden', background: preview ? 'transparent' : 'var(--surface-2)' }}>
+    {/* Hidden inputs — one for camera, one for gallery */}
+    <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
+    <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
+    {preview
+      ? <img src={preview} alt="Receipt" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 14, display: 'block' }} />
+      : (
+        <>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>🧾</div>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', fontWeight: 600, marginBottom: 16 }}>Upload your receipt</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <button onClick={() => fileRef.current?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-3)', color: 'var(--text-2)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              📷 Camera
+            </button>
+            <button onClick={() => galleryRef.current?.click()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-3)', color: 'var(--text-2)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              🖼️ Gallery
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 12 }}>or drag & drop • JPG, PNG up to 5MB</div>
+        </>
+      )
+    }
+  </div>
+)}
           {error && <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, fontSize: 13, color: '#ef4444' }}>⚠️ {error}</div>}
           {preview && !result && (
             <div style={{ display: 'flex', gap: 10 }}>
