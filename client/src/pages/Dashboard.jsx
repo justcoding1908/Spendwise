@@ -559,7 +559,7 @@ function ReceiptScanner({ onAdd, onClose }) {
           {!result && (
             <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()} onClick={() => fileRef.current?.click()}
               style={{ border: `2px dashed ${preview ? 'rgba(0,229,160,0.4)' : 'var(--border)'}`, borderRadius: 16, padding: preview ? 0 : '36px 24px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', overflow: 'hidden', background: preview ? 'transparent' : 'var(--surface-2)' }}>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
               {preview ? <img src={preview} alt="Receipt" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', borderRadius: 14, display: 'block' }} /> : (
                 <>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📷</div>
