@@ -16,9 +16,9 @@ export default function Register() {
     if (form.password.length < 6) { toast.error('Password needs 6+ characters'); return }
     setLoading(true)
     try {
-      await register(form.name, form.email, form.password)
-      toast.success("You're in! Let's get you sorted 🚀")
-      navigate('/dashboard')
+      const data = await register(form.name, form.email, form.password)
+      toast.success(data.message || 'Check your email to verify your account 📩')
+      navigate('/login')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Something went wrong')
     } finally { setLoading(false) }

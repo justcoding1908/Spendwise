@@ -27,10 +27,9 @@ export function AuthProvider({ children }) {
   }
 
   const register = async (name, email, password) => {
+    // No token comes back anymore — the account exists but is unverified,
+    // and login is blocked until the user clicks the link in their email.
     const r = await api.post('/auth/register', { name, email, password })
-    localStorage.setItem('sw_token', r.data.token)
-    localStorage.setItem('sw_user', JSON.stringify(r.data.user))
-    setUser(r.data.user)
     return r.data
   }
 
