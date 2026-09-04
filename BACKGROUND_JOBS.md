@@ -92,15 +92,14 @@ Right now, everything runs on your own machine. To make it work for real users o
 
 1. **A production Redis** — your laptop's Docker Redis isn't reachable from the internet. Need a cloud-hosted one. **Upstash** (upstash.com) has a solid free tier and is the easiest option.
 2. **Somewhere for the worker to run 24/7** — it can't just be "a terminal on your laptop." Render (where the backend already lives) has a **Background Worker** service type made exactly for this: a process that runs constantly without needing to accept web traffic.
-3. **Environment variables updated on Render**: `REDIS_HOST`/`REDIS_PORT` (pointing at Upstash instead of localhost), `RESEND_API_KEY`, and `BACKEND_URL` (your real Render URL, e.g. `https://spendwise-backend-rr7x.onrender.com`, so the emailed link points somewhere real instead of `localhost:5000`).
+3. **Environment variables updated on Render**: `REDIS_URL` (Upstash's ready-made connection string, instead of localhost), `RESEND_API_KEY`, and `BACKEND_URL` (your real Render URL, e.g. `https://spendwise-backend-rr7x.onrender.com`, so the emailed link points somewhere real instead of `localhost:5000`).
 4. **The frontend needs no changes** — `client/src/api.js` already falls back to the Render backend URL when `VITE_API_URL` isn't set, so Vercel is unaffected by this feature.
 
 ### Steps
 
-1. Create a free Redis database on **Upstash** → copy its host + port.
-2. On Render → your backend service → **Environment** tab → add/update: `REDIS_HOST`, `REDIS_PORT`, `RESEND_API_KEY`, `BACKEND_URL`.
-3. On Render, create a **second service** (type: **Background Worker**), same repo, start command `node workers/emailWorker.js`, same environment variables.
+1. Create a free Redis database on **Upstash** → copy its `REDIS_URL` (looks like `rediss://default:<password>@<host>:<port>` — the double `s` means it's TLS, which `ioredis` handles automatically).
+2. On Render → your backend service → **Environment** tab → add/update: `REDIS_URL`, `RESEND_API_KEY`, `BACKEND_URL`.
+3. On Render, create a **second service** (type: **Background Worker**), same repo, start command `node workers/emailWorker.js`, same environment variables (needs `REDIS_URL` and `RESEND_API_KEY` at minimum — `BACKEND_URL` isn't used by the worker itself).
 4. Redeploy the backend so it picks up the new env vars.
-5. Test on the live site with a real email address.
-
-Heads up: Upstash's free Redis usually requires a secure (TLS) connection, which needs one small code change in `config/redis.js` (adding a `tls: {}` option). Not done yet — flag this when you're ready to actually deploy, and we'll handle it then.
+5. Merge the `feature/email-verification-jobs` branch into `main` (only once steps 1-4 are done — merging first would break live registration, since the deployed backend would try to reach Redis before it exists).
+6. Test on the live site with a real email address.
