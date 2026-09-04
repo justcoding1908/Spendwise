@@ -27,12 +27,23 @@ export const register = async (req, res) => {
     const verificationTokenExpiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString()
 
     // Insert into profiles table, unverified, with the token attached
-    await supabase.from('profiles').insert({
+    const { error: profileError } = await supabase.from('profiles').insert({
       id: data.user.id, name, email,
       email_verified: false,
       verification_token: verificationToken,
       verification_token_expires_at: verificationTokenExpiresAt
     })
+
+    if (profileError) {
+      // Without this, a failed insert here leaves a real Supabase Auth
+      // user with no profiles row — permanently stuck (can't re-register,
+      // since the email already exists; can't log in, since login() has
+      // nothing to read `email_verified` from). Roll the auth user back
+      // instead, so the email is free to try registering again cleanly.
+      console.error('Profile insert failed during registration:', profileError)
+      await supabase.auth.admin.deleteUser(data.user.id)
+      return res.status(500).json({ success: false, message: 'Something went wrong creating your account. Please try again.' })
+    }
 
     // Build the link they'll click from their inbox
     const verifyUrl = `${process.env.BACKEND_URL}/api/auth/verify-email?token=${verificationToken}`
