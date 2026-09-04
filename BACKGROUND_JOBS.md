@@ -88,18 +88,19 @@ Four things need to be running at once, each in its own terminal:
 
 ## Deploying This to Production
 
-Right now, everything runs on your own machine. To make it work for real users on the live site, four things need to move off localhost:
+Right now, everything runs on your own machine. To make it work for real users on the live site, a few things need to move off localhost — and we deliberately chose the free-tier-friendly version of each:
 
 1. **A production Redis** — your laptop's Docker Redis isn't reachable from the internet. Need a cloud-hosted one. **Upstash** (upstash.com) has a solid free tier and is the easiest option.
-2. **Somewhere for the worker to run 24/7** — it can't just be "a terminal on your laptop." Render (where the backend already lives) has a **Background Worker** service type made exactly for this: a process that runs constantly without needing to accept web traffic.
-3. **Environment variables updated on Render**: `REDIS_URL` (Upstash's ready-made connection string, instead of localhost), `RESEND_API_KEY`, and `BACKEND_URL` (your real Render URL, e.g. `https://spendwise-backend-rr7x.onrender.com`, so the emailed link points somewhere real instead of `localhost:5000`).
+2. **Somewhere for the worker to run** — Render's dedicated **Background Worker** service type is the "textbook" answer, but it requires a paid plan. Instead, we run the worker **inside the same process as the backend** (see `server.js` — gated behind a `RUN_EMBEDDED_WORKER` env var), which costs nothing extra since it reuses the backend service you already have. Locally we keep them as separate processes on purpose, since seeing them as two separate terminals is what makes the producer/consumer concept visible while learning — this embedding is a production-only shortcut.
+3. **Environment variables updated on Render** (backend service only — no second service needed): `REDIS_URL` (Upstash's ready-made connection string), `RESEND_API_KEY`, `BACKEND_URL` (your real Render URL, e.g. `https://spendwise-backend-rr7x.onrender.com`, so the emailed link points somewhere real instead of `localhost:5000`), and `RUN_EMBEDDED_WORKER=true`.
 4. **The frontend needs no changes** — `client/src/api.js` already falls back to the Render backend URL when `VITE_API_URL` isn't set, so Vercel is unaffected by this feature.
 
 ### Steps
 
 1. Create a free Redis database on **Upstash** → copy its `REDIS_URL` (looks like `rediss://default:<password>@<host>:<port>` — the double `s` means it's TLS, which `ioredis` handles automatically).
-2. On Render → your backend service → **Environment** tab → add/update: `REDIS_URL`, `RESEND_API_KEY`, `BACKEND_URL`.
-3. On Render, create a **second service** (type: **Background Worker**), same repo, start command `node workers/emailWorker.js`, same environment variables (needs `REDIS_URL` and `RESEND_API_KEY` at minimum — `BACKEND_URL` isn't used by the worker itself).
-4. Redeploy the backend so it picks up the new env vars.
-5. Merge the `feature/email-verification-jobs` branch into `main` (only once steps 1-4 are done — merging first would break live registration, since the deployed backend would try to reach Redis before it exists).
-6. Test on the live site with a real email address.
+2. On Render → your backend service → **Environment** tab → add/update: `REDIS_URL`, `RESEND_API_KEY`, `BACKEND_URL`, `RUN_EMBEDDED_WORKER=true`.
+3. Merge the `feature/email-verification-jobs` branch into `main` (only once step 2 is done — merging first would redeploy the backend with code expecting Redis before it's configured, breaking live registration).
+4. Render auto-redeploys the backend from `main` — it now runs the email worker in-process alongside the API.
+5. Test on the live site with a real email address.
+
+One tradeoff worth knowing: if your Render plan is on the free tier, the whole service (API + embedded worker) spins down after 15 minutes of no HTTP traffic, and takes ~30-60 seconds to wake back up on the next request. This isn't a new downside from embedding the worker — your API already has this behavior today — it just means a verification email sent while the service is asleep gets delayed until something wakes it up (a login/register attempt, for instance), rather than sent instantly.
